@@ -4,15 +4,10 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>76fb2558-d547-4ea8-a59f-ab7a9b0590ff</UserSecretsId>
+    <UserSecretsId>467cb0a3-5238-4fc1-b1ea-b8cf6112fc9e</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="8.0.7" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\MiddleMan.Core\MiddleMan.Core.csproj" />
     <ProjectReference Include="..\MiddleMan.WebSockets\MiddleMan.WebSockets.csproj" />
   </ItemGroup>
 

@@ -1,43 +1,42 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using MiddleMan.Web.Infrastructure;
-using System.Reflection;
 
 namespace MiddleMan.Web
 {
-    public class Program
+  public class Program
+  {
+    public static void Main(string[] args)
     {
-        public static void Main(string[] args)
-        {
-            var builder = WebApplication.CreateBuilder(args);
+      var builder = WebApplication.CreateBuilder(args);
 
-            // Add services to the container.
-            builder.Services.AddControllers();
+      // Add services to the container.
+      builder.Services.AddControllersWithViews();
 
-            builder.Services.AddWebSocketHandler();
+      builder.Services.AddWebSocketHandler();
 
-            var app = builder.Build();
+      builder.AddGoogleAuthentication();
 
-            // Configure the HTTP request pipeline.
-            if (!app.Environment.IsDevelopment())
-            {
-                app.UseExceptionHandler("/Error");
-                // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-                app.UseHsts();
-            }
-            app.UseHttpsRedirection();
+      var app = builder.Build();
 
-            app.UseStaticFiles();
+      // Configure the HTTP request pipeline.
+      if (!app.Environment.IsDevelopment())
+      {
+        app.UseExceptionHandler("/Error");
+        // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+        app.UseHsts();
+      }
+      app.UseHttpsRedirection();
 
-            app.UseRouting();
+      app.UseStaticFiles();
 
-            app.UseAuthorization();
+      app.UseRouting();
 
-            app.MapControllers();
+      app.UseAuthorization();
 
-            app.UseWebSockets();
-            
-            app.Run();
-        }
+      app.MapControllers();
+
+      app.UseWebSockets();
+
+      app.Run();
     }
+  }
 }
