@@ -4,7 +4,7 @@ using System.Text;
 
 namespace MiddleMan.WebSockets
 {
-    public class WebSocketsHandler
+    public class WebSocketsHandler : IWebSocketsHandler
     {
         private readonly Dictionary<int, WebSocketData> websockets = new Dictionary<int, WebSocketData>();
 
@@ -22,15 +22,15 @@ namespace MiddleMan.WebSockets
             return true;
         }
 
-        public async Task<string> Communicate(int webSocketId, string message)
+        public async Task<string> CommunicateAsync(int webSocketId, string message, CancellationToken cancellationToken)
         {
             var success = websockets.TryGetValue(webSocketId, out var webSocket);
-            if (!success) return string.Empty;
+            if (!success || webSocket == null) return string.Empty;
 
-            await webSocket.Socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(message)), WebSocketMessageType.Text, true, CancellationToken.None);
+            await webSocket.Socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(message)), WebSocketMessageType.Text, true, cancellationToken);
 
             var responseBuffer = new ArraySegment<byte>(new byte[1024]);
-            await webSocket.Socket.ReceiveAsync(responseBuffer, CancellationToken.None);
+            await webSocket.Socket.ReceiveAsync(responseBuffer, cancellationToken);
 
             return Encoding.UTF8.GetString(responseBuffer.TakeWhile(b => b != 0).ToArray());
         }

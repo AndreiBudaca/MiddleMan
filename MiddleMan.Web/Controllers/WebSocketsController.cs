@@ -8,9 +8,9 @@ namespace MiddleMan.Web.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [AllowAnonymous]
-    public class WebSocketsController(WebSocketsHandler webSocketsHandler) : ControllerBase
+    public class WebSocketsController(IWebSocketsHandler webSocketsHandler) : ControllerBase
     {
-        private readonly WebSocketsHandler webSocketsHandler = webSocketsHandler;
+        private readonly IWebSocketsHandler webSocketsHandler = webSocketsHandler;
 
         [Route("/ws")]
         public async Task Subscribe()
@@ -37,9 +37,9 @@ namespace MiddleMan.Web.Controllers
 
         [HttpPost]
         [Route("{websocketId}")]
-        public async Task<IActionResult> Send([FromRoute] int websocketId, [FromBody] string data)
+        public async Task<IActionResult> Send([FromRoute] int websocketId, [FromBody] string data, CancellationToken cancellationToken)
         {
-            var response = await webSocketsHandler.Communicate(websocketId, data);
+            var response = await webSocketsHandler.CommunicateAsync(websocketId, data, cancellationToken);
 
             if (string.IsNullOrEmpty(response)) return NotFound();
             return Ok(response);

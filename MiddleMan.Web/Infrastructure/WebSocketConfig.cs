@@ -6,7 +6,7 @@ namespace MiddleMan.Web.Infrastructure
     {
         public static void AddWebSocketHandler(this IServiceCollection services)
         {
-            services.AddSingleton<WebSocketsHandler>();
+            services.AddSingleton<IWebSocketsHandler, WebSocketsHandler>();
         }
     }
 }

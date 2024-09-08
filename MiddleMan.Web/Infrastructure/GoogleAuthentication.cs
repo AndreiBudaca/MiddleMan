@@ -20,8 +20,8 @@ namespace MiddleMan.Web.Infrastructure
       .AddGoogle(googleOptions =>
       {
         googleOptions.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-        googleOptions.ClientId = configuration[ConfigurationConstants.GoogleAuthentication.ClientId];
-        googleOptions.ClientSecret = configuration[ConfigurationConstants.GoogleAuthentication.ClientSecret];
+        googleOptions.ClientId = configuration[ConfigurationConstants.GoogleAuthentication.ClientId] ?? string.Empty;
+        googleOptions.ClientSecret = configuration[ConfigurationConstants.GoogleAuthentication.ClientSecret] ?? string.Empty;
       });
     }
   }
