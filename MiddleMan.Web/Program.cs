@@ -1,8 +1,8 @@
-using MiddleMan.Web.Infrastructure;
+using MiddleMan.Web.Infrastructure.Configuration;
 
 namespace MiddleMan.Web
 {
-  public class Program
+    public class Program
   {
     public static void Main(string[] args)
     {

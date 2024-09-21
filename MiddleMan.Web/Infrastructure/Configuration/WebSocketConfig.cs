@@ -1,6 +1,6 @@
 ﻿using MiddleMan.WebSockets;
 
-namespace MiddleMan.Web.Infrastructure
+namespace MiddleMan.Web.Infrastructure.Configuration
 {
     public static class WebSocketConfig
     {

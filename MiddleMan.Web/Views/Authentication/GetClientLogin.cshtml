@@ -1,0 +1,16 @@
+﻿<div>
+  <div class="form-container">
+    <div class="form-entry-container">
+      <label for="client-name">Client name</label>
+      <input name="client-name" id="client-name" type="text" />
+    </div>
+
+    <button id="client-token-submit" class="submit" data-target="@Url.ActionLink("PostClientLogin", "Authentication")">Generate access token</button>
+
+    <div class="form-response">
+      <p id="client-token-response"></p>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app/Authentication/ClientLogin.js" type="module"></script>

@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace MiddleMan.Web.Controllers
+namespace MiddleMan.Web.Controllers.Home
 {
   [Route("/")]
   [AllowAnonymous]

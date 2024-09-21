@@ -1,11 +1,19 @@
 ﻿namespace MiddleMan.Core
 {
-  public class ConfigurationConstants
+  public static class ConfigurationConstants
   {
-    public class GoogleAuthentication
+    public static class Authentication
     {
-      public readonly static string ClientId = "Authentication:Google:ClientId";
-      public readonly static string ClientSecret = "Authentication:Google:ClientSecret";
+      public static class GoogleAuthentication
+      {
+        public readonly static string ClientId = "Authentication:Google:ClientId";
+        public readonly static string ClientSecret = "Authentication:Google:ClientSecret";
+      }
+
+      public static class ClientToken
+      {
+        public readonly static string Secret = "Authentication:ClientToken:Secret";
+      }
     }
   }
 }

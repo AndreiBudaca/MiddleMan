@@ -18,7 +18,7 @@ namespace MiddleMan.WebSockets
             var success = websockets.TryGetValue(webSocketId, out var webSocket);
             if (!success) return false;
 
-            webSocket.SocketFinished.SetResult(true);
+            webSocket?.SocketFinished.SetResult(true);
             return true;
         }
 

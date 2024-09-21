@@ -17,4 +17,8 @@
     <ProjectReference Include="..\MiddleMan.WebSockets\MiddleMan.WebSockets.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="wwwroot\js\app\Authentication\" />
+  </ItemGroup>
+
 </Project>
