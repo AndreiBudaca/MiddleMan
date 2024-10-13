@@ -1,3 +1,4 @@
+using MiddleMan.Web.Infrastructure.Attributes;
 using MiddleMan.Web.Infrastructure.Configuration;
 
 namespace MiddleMan.Web
@@ -9,7 +10,10 @@ namespace MiddleMan.Web
       var builder = WebApplication.CreateBuilder(args);
 
       // Add services to the container.
-      builder.Services.AddControllersWithViews();
+      builder.Services.AddControllersWithViews(options =>
+      {
+        options.Filters.Add(typeof(ModelValidatorAttribute));
+      });
 
       builder.Services.AddWebSocketHandler();
 

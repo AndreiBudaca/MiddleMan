@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MiddleMan.Web.Infrastructure;
 using MiddleMan.Web.Infrastructure.Attributes;
 using MiddleMan.WebSockets;
 using MiddleMan.WebSockets.Model;

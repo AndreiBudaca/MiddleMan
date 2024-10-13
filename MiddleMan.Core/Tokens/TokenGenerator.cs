@@ -34,11 +34,11 @@ namespace MiddleMan.Core.Tokens
     {
       if (data == null) return null;
 
-      var dataPars = data.Split('.', StringSplitOptions.RemoveEmptyEntries);
-      if (dataPars.Length != 2) return null;
+      var dataParts = data.Split('.', StringSplitOptions.RemoveEmptyEntries);
+      if (dataParts.Length != 2) return null;
 
-      var receivedTokenData = dataPars[0];
-      var receivedSignature = dataPars[1];
+      var receivedTokenData = dataParts[0];
+      var receivedSignature = dataParts[1];
 
       var signatureBytes = Encoding.UTF8.GetBytes($"{receivedTokenData}{secret}");
       var signature = Convert.ToBase64String(SHA256.HashData(signatureBytes));

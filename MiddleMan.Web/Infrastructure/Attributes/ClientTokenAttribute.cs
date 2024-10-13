@@ -21,8 +21,24 @@ namespace MiddleMan.Web.Infrastructure.Attributes
 
     public void OnAuthorization(AuthorizationFilterContext context)
     {
-      var authToken = context.HttpContext.Request.Headers.Authorization.FirstOrDefault();
-      if (authToken == null)
+      var auth = context.HttpContext.Request.Headers.Authorization.FirstOrDefault();
+      if (auth == null)
+      {
+        context.Result = new UnauthorizedResult();
+        return;
+      }
+
+      var authParts = auth.Split(" ", StringSplitOptions.RemoveEmptyEntries);
+      if (authParts.Length != 2)
+      {
+        context.Result = new UnauthorizedResult();
+        return;
+      }
+
+      var authType = authParts[0];
+      var authToken = authParts[1];
+
+      if (authType != "Bearer")
       {
         context.Result = new UnauthorizedResult();
         return;

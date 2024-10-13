@@ -11,7 +11,8 @@ using MiddleMan.Web.Infrastructure.Identity;
 
 namespace MiddleMan.Web.Controllers.Authentication
 {
-    [Route("[controller]")]
+  [Route("[controller]")]
+  [Authorize]
   public class AuthenticationController : Controller
   {
     private readonly IConfiguration configuration;
