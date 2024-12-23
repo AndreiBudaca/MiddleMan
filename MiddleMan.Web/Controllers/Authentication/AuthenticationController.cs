@@ -56,14 +56,14 @@ namespace MiddleMan.Web.Controllers.Authentication
       {
         Identifier = User.Identifier(),
         Name = model.ClientName,
-        Validity = TokenManager.DefaultValidity,
-        Secret = configuration.GetValue<string>(ConfigurationConstants.Authentication.ClientToken.Secret) ?? string.Empty,
+        Secret = configuration.GetValue<string>(ConfigurationConstants.Authentication.ClientToken.Secret),
       });
 
       return Ok(token);
     }
 
     [HttpGet]
+    [AllowAnonymous]
     [ClientToken]
     [Route("Test")]
     public IActionResult TestClientLogin()

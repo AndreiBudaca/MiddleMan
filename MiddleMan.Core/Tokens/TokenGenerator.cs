@@ -1,56 +1,38 @@
-﻿using MiddleMan.Core.Tokens.Model;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+﻿using JWT.Algorithms;
+using JWT.Builder;
+using MiddleMan.Core.Tokens.Constants;
+using MiddleMan.Core.Tokens.Model;
 
 namespace MiddleMan.Core.Tokens
 {
   public static class TokenManager
   {
-    public const int DefaultValidity = 30;
+    private static readonly JwtBuilder _jwtBuilder = JwtBuilder.Create()
+      .WithAlgorithm(new HMACSHA256Algorithm());
 
     public static string Generate(TokenData data)
     {
       ArgumentNullException.ThrowIfNull(nameof(data));
-      ArgumentException.ThrowIfNullOrWhiteSpace(data.Secret, nameof(data.Secret)); 
+      ArgumentException.ThrowIfNullOrWhiteSpace(data.Secret, nameof(data.Secret));
 
-      var jsonData = new Token
+      var claims = new Dictionary<string, object>()
       {
-        Identifier = data.Identifier,
-        Name = data.Name,
-        ValidTill = DateTime.UtcNow.AddMinutes(data.Validity),
+        { TokenClaims.Issuer, TokenConstants.TokenIssuer },
+        { TokenClaims.Subject, data.Identifier },
+        { TokenClaims.Expiration, DateTimeOffset.UtcNow.AddMinutes(data.Validity).ToUnixTimeSeconds() },
+        { TokenClaims.FullName, data.Name },
       };
 
-      var jsonString = JsonSerializer.Serialize(jsonData);
-      var tokenData = Convert.ToBase64String(Encoding.UTF8.GetBytes(jsonString));
-
-      var signatureBytes = Encoding.UTF8.GetBytes($"{tokenData}{data.Secret}");
-      var signature = Convert.ToBase64String(SHA256.HashData(signatureBytes));
-
-      return $"{tokenData}.{signature}";
+      return _jwtBuilder.WithSecret(data.Secret).Encode(claims);
     }
 
-    public static Token? Parse(string data, string secret)
+    public static IDictionary<string, object>? Parse(string data, string secret)
     {
       if (data == null) return null;
 
-      var dataParts = data.Split('.', StringSplitOptions.RemoveEmptyEntries);
-      if (dataParts.Length != 2) return null;
-
-      var receivedTokenData = dataParts[0];
-      var receivedSignature = dataParts[1];
-
-      var signatureBytes = Encoding.UTF8.GetBytes($"{receivedTokenData}{secret}");
-      var signature = Convert.ToBase64String(SHA256.HashData(signatureBytes));
-      
-      if (receivedSignature != signature) return null;
-
-      var jsonData = Encoding.UTF8.GetString(Convert.FromBase64String(receivedTokenData));
-      var token = JsonSerializer.Deserialize<Token>(jsonData);
-      if (token == null) return null;
-
-      if (token.ValidTill < DateTime.UtcNow) return null;
-      return token;
+      return _jwtBuilder.WithSecret(secret)
+        .MustVerifySignature()
+        .Decode<IDictionary<string, object>>(data);
     }
   }
 }

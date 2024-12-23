@@ -1,4 +1,6 @@
-﻿namespace MiddleMan.Core.Tokens.Model
+﻿using MiddleMan.Core.Tokens.Constants;
+
+namespace MiddleMan.Core.Tokens.Model
 {
   public class TokenData
   {
@@ -6,8 +8,8 @@
 
     public string Name { get; set; } = string.Empty;
 
-    public int Validity { get; set; }
+    public int Validity { get; set; } = TokenConstants.DefaultValidity;
 
-    public string Secret { get; set; } = string.Empty;
+    public string? Secret { get; set; }
   }
 }

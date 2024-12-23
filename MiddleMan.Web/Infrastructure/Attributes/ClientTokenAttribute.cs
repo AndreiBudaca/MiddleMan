@@ -10,14 +10,9 @@ namespace MiddleMan.Web.Infrastructure.Attributes
     public ClientTokenAttribute() : base(typeof(ClientTokenFilter)) { }
   }
 
-  public class ClientTokenFilter : IAuthorizationFilter
+  public class ClientTokenFilter(IConfiguration configuration) : IAuthorizationFilter
   {
-    private readonly IConfiguration configuration;
-
-    public ClientTokenFilter(IConfiguration configuration)
-    {
-      this.configuration = configuration;
-    }
+    private readonly IConfiguration configuration = configuration;
 
     public void OnAuthorization(AuthorizationFilterContext context)
     {
@@ -45,8 +40,16 @@ namespace MiddleMan.Web.Infrastructure.Attributes
       }
 
       var secret = configuration.GetValue<string>(ConfigurationConstants.Authentication.ClientToken.Secret) ?? string.Empty;
-      var token = TokenManager.Parse(authToken, secret);
-      if (token == null)
+
+      try
+      {
+        var token = TokenManager.Parse(authToken, secret);
+        if (token == null)
+        {
+          context.Result = new ForbidResult();
+        }
+      }
+      catch (Exception)
       {
         context.Result = new ForbidResult();
       }
