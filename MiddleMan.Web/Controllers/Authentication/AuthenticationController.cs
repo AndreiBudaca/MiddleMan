@@ -3,15 +3,14 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MiddleMan.Core;
-using MiddleMan.Core.Tokens;
-using MiddleMan.Core.Tokens.Model;
 using MiddleMan.Web.Controllers.Authentication.Model;
-using MiddleMan.Web.Infrastructure.Attributes;
 using MiddleMan.Web.Infrastructure.Identity;
+using MiddleMan.Web.Infrastructure.Tokens;
+using MiddleMan.Web.Infrastructure.Tokens.Model;
 
 namespace MiddleMan.Web.Controllers.Authentication
 {
-  [Route("[controller]")]
+    [Route("[controller]")]
   [Authorize]
   public class AuthenticationController : Controller
   {
@@ -60,15 +59,6 @@ namespace MiddleMan.Web.Controllers.Authentication
       });
 
       return Ok(token);
-    }
-
-    [HttpGet]
-    [AllowAnonymous]
-    [ClientToken]
-    [Route("Test")]
-    public IActionResult TestClientLogin()
-    {
-      return Ok();
     }
   }
 }

@@ -5,9 +5,7 @@ VisualStudioVersion = 17.9.34728.123
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MiddleMan.Web", "MiddleMan.Web\MiddleMan.Web.csproj", "{B8D4358B-E8E0-4911-9605-33989E938A31}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MiddleMan.WebSockets", "MiddleMan.WebSockets\MiddleMan.WebSockets.csproj", "{CFEC2403-B205-4955-B79C-C1B4C7AA521B}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiddleMan.Core", "MiddleMan.Core\MiddleMan.Core.csproj", "{F55332CC-C124-47A5-8DEE-28DE08261BF9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MiddleMan.Core", "MiddleMan.Core\MiddleMan.Core.csproj", "{F55332CC-C124-47A5-8DEE-28DE08261BF9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -19,10 +17,6 @@ Global
 		{B8D4358B-E8E0-4911-9605-33989E938A31}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B8D4358B-E8E0-4911-9605-33989E938A31}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B8D4358B-E8E0-4911-9605-33989E938A31}.Release|Any CPU.Build.0 = Release|Any CPU
-		{CFEC2403-B205-4955-B79C-C1B4C7AA521B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{CFEC2403-B205-4955-B79C-C1B4C7AA521B}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{CFEC2403-B205-4955-B79C-C1B4C7AA521B}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{CFEC2403-B205-4955-B79C-C1B4C7AA521B}.Release|Any CPU.Build.0 = Release|Any CPU
 		{F55332CC-C124-47A5-8DEE-28DE08261BF9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{F55332CC-C124-47A5-8DEE-28DE08261BF9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F55332CC-C124-47A5-8DEE-28DE08261BF9}.Release|Any CPU.ActiveCfg = Release|Any CPU

@@ -1,6 +1,6 @@
-﻿using MiddleMan.Core.Tokens.Constants;
+﻿using MiddleMan.Web.Infrastructure.Tokens.Constants;
 
-namespace MiddleMan.Core.Tokens.Model
+namespace MiddleMan.Web.Infrastructure.Tokens.Model
 {
   public class TokenData
   {
