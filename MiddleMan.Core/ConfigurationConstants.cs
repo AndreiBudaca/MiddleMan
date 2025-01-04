@@ -15,5 +15,10 @@
         public readonly static string Secret = "Authentication:ClientToken:Secret";
       }
     }
+    
+    public static class ConnectionStrings
+    {
+      public readonly static string Redis = "Redis";
+    }
   }
 }

@@ -10,7 +10,7 @@ using MiddleMan.Web.Infrastructure.Tokens.Model;
 
 namespace MiddleMan.Web.Controllers.Authentication
 {
-    [Route("[controller]")]
+  [Route("[controller]")]
   [Authorize]
   public class AuthenticationController : Controller
   {

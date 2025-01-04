@@ -15,6 +15,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\MiddleMan.Core\MiddleMan.Core.csproj" />
+		<ProjectReference Include="..\MiddleMan.Service\MiddleMan.Service.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

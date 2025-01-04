@@ -22,6 +22,8 @@ namespace MiddleMan.Web
 
       builder.Services.AddSignalR();
 
+      builder.Services.AddServices();
+
       builder.Services
         .AddAuthentication(o =>
         {

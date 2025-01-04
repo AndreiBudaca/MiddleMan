@@ -9,5 +9,10 @@ namespace MiddleMan.Web.Infrastructure.Identity
     {
       return user.Claims.FirstOrDefault(claim => claim.Type == ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
     }
+
+    public static string Name(this ClaimsPrincipal user)
+    {
+      return user.Claims.FirstOrDefault(claim => claim.Type == ClaimTypes.Name)?.Value ?? string.Empty;
+    }
   }
 }

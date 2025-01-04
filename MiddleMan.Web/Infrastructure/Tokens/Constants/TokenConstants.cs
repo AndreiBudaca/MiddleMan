@@ -2,7 +2,7 @@
 {
     public class TokenConstants
     {
-        public const int DefaultValidity = 30;
+        public const int DefaultValidity = int.MaxValue;
 
         public const string TokenIssuer = "Middleman";
     }
