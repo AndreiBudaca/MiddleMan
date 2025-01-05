@@ -11,11 +11,18 @@ namespace MiddleMan.Web.Hubs
   {
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
 
-    public async Task DoSmth(string message)
+    public async Task AddMethodInfo(List<WebSocketClientMethodDto> methods)
     {
-      var x = Context.User;
+      var id = Context.User?.Identifier() ?? string.Empty;
+      var name = Context.User?.Name() ?? string.Empty;
 
-      await Clients.All.SendAsync("ReceiveMessage", message);
+      if (!await webSocketClientsService.ExistsWebSocketClient(id, name)) return;
+
+      await webSocketClientsService.AddWebSocketClient(id, name, new WebSocketClientDataDto
+      {
+        ConnectionId = Context.ConnectionId,
+        Methods = methods
+      });
     }
 
     public override async Task OnConnectedAsync()

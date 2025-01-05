@@ -4,6 +4,6 @@
   {
     public string? ConnectionId { get; set; }
 
-    public List<string> Methods { get; set; } = [];
+    public List<WebSocketClientMethodDto> Methods { get; set; } = [];
   }
 }

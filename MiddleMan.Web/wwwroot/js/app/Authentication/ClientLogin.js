@@ -21,7 +21,7 @@ async function generateClientToken(targetUrl) {
   if (response.ok) {
     const token = await response.text();
     const tokenContainer = document.getElementById("client-token-response");
-    tokenContainer.innerHTML = token;
+    tokenContainer.value = token;
   } else {
   }
 }

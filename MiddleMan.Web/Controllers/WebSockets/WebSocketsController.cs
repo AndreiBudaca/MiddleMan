@@ -2,9 +2,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Service.WebSocketClients;
+using MiddleMan.Web.Controllers.WebSockets.Model;
 using MiddleMan.Web.Hubs;
 using MiddleMan.Web.Infrastructure.Identity;
-using System.Text;
 
 namespace MiddleMan.Web.Controllers.WebSockets
 {
@@ -20,7 +20,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
 
     [HttpPost]
     [Route("{websocketClientName}/{method}")]
-    public async Task<IActionResult> Send([FromRoute] string websocketClientName, [FromRoute] string method, CancellationToken cancellationToken)
+    public async Task<IActionResult> Send([FromRoute] string websocketClientName, [FromRoute] string method, [FromBody] object data, CancellationToken cancellationToken)
     {
       if (string.IsNullOrWhiteSpace(websocketClientName)) return base.NotFound();
       if (string.IsNullOrWhiteSpace(method)) return NotFound();
@@ -37,26 +37,27 @@ namespace MiddleMan.Web.Controllers.WebSockets
         return NotFound();
       }
 
-      object result;
-      var reqBody = HttpContext.Request.Body;
-      if (reqBody == null)
-      {
-        result = await hubClient.InvokeAsync<object>(method, cancellationToken);
-        return Ok(result);
-      }
-
-      var buff = new byte[(int)(HttpContext.Request.ContentLength ?? 0)];
-      await reqBody.ReadAsync(buff, cancellationToken);
-      var data = Encoding.UTF8.GetString(buff);
-
-      result = await hubClient.InvokeAsync<object>(method, data, cancellationToken);
+      var result = await hubClient.InvokeAsync<object>(method, data, cancellationToken);
       return Ok(result);
     }
 
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-      return Ok(await webSocketClientsService.GetWebSocketClients(User.Identifier()));
+      var clients = await webSocketClientsService.GetWebSocketClients(User.Identifier());
+
+      var model = clients.Select(c => new WebSocketClientModel
+      {
+        Name = c.Name,
+        Methods = c.Methods.Select(m => new WebSocketClientMethodModel
+        {
+          Name = m.Name,
+          Arguments = m.Arguments.Select(x => new WebSocketClientMethodArgumentModel(x)).ToList(),
+          Returns = m.Returns != null ? new WebSocketClientMethodArgumentModel(m.Returns) : null
+        }).ToList()
+      }).ToList();
+
+      return PartialView(model);
     }
   }
 }

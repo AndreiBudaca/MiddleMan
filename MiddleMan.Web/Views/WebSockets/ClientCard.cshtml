@@ -1,0 +1,56 @@
+﻿@model MiddleMan.Web.Controllers.WebSockets.Model.WebSocketClientModel
+
+<div class="card">
+  <h5 class="card-header">@Model.Name</h5>
+  <div class="card-body">
+    <div class="accordion" id="accordion-@Model.Name">
+      @foreach (var method in Model.Methods)
+      {
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-@Model.Name-@method.Name" aria-controls="collapse-@Model.Name-@method.Name">
+              @method.Name
+            </button>
+          </h2>
+          <div id="collapse-@Model.Name-@method.Name" class="accordion-collapse collapse" aria-labelledby="heading-@method.Name" data-bs-parent="#accordion-@Model.Name">
+            <div class="accordion-body">
+              <h5>Arguments</h5>
+              @{
+                ViewBag.DisableInputs = false;
+              }
+              <div class="card">
+                <ul class="list-group list-group-flush">
+                  @for (int i = 0; i < method.Arguments.Count; i++)
+                  {
+                    <li class="list-group-item argument" style="margin-bottom: 0px !important">
+                      @await Html.PartialAsync("ClientMethodArgument", method.Arguments[i])
+                    </li>
+                  }
+                </ul>
+              </div>
+              <br />
+              <button type="button" class="btn btn-secondary" data-client="@Model.Name" data-method="@method.Name">Call</button>
+              <br />
+              @if (method.Returns != null)
+              {
+                {
+                  ViewBag.DisableInputs = true;
+                }
+                <h5 style="margin-top: 10px">Result</h5>
+                <div class="card result">
+                  <ul class="list-group list-group-flush">
+                    <li class="list-group-item argument" style="margin-bottom: 0px !important">
+                      @await Html.PartialAsync("ClientMethodArgument", method.Returns)
+                    </li>
+                  </ul>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</div>
+
+<script></script>

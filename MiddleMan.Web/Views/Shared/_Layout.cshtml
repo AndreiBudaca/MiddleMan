@@ -1,51 +1,93 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - MiddleMan.Web</title>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/MiddleMan.Web.styles.css" asp-append-version="true" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>@ViewData["Title"] - MiddleMan.Web</title>
+  <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+  <link rel="stylesheet" href="~/MiddleMan.Web.styles.css" asp-append-version="true" />
+
+  <script>
+    window.nodeScriptReplace = (node) => {
+      if (nodeScriptIs(node) === true) {
+        node.parentNode.replaceChild(nodeScriptClone(node), node);
+      }
+      else {
+        var i = -1, children = node.childNodes;
+        while (++i < children.length) {
+          nodeScriptReplace(children[i]);
+        }
+      }
+
+      return node;
+    }
+    function nodeScriptClone(node) {
+      var script = document.createElement("script");
+      script.text = node.innerHTML;
+
+      var i = -1, attrs = node.attributes, attr;
+      while (++i < attrs.length) {
+        script.setAttribute((attr = attrs[i]).name, attr.value);
+      }
+      return script;
+    }
+
+    function nodeScriptIs(node) {
+      return node.tagName === 'SCRIPT';
+    }
+  </script>
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container">
-                <a class="navbar-brand" asp-area="" asp-page="/Index">MiddleMan.Web</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Authentication" asp-action="GetClientLogin">Client Login</a>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
-
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2024 - MiddleMan.Web
+  <header>
+    <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+      <div class="container">
+        <a class="navbar-brand" asp-area="" asp-page="/Index">MiddleMan.Web</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+                aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="navbar-collapse collapse" style="display: flex; justify-content: space-between">
+          <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+            <ul class="navbar-nav flex-grow-1">
+              <li class="nav-item">
+                <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link text-dark" asp-area="" asp-controller="Authentication" asp-action="GetClientLogin">Client management</a>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <ul class="navbar-nav flex-grow-1">
+              <li class="nav-item">
+                @{
+                  var buttonText = (User.Identity?.IsAuthenticated ?? false) ? "Logout" : "Login";
+                }
+                <a class="nav-link text-dark" asp-area="" asp-controller="Authentication" asp-action="@buttonText">@buttonText</a>
+              </li>
+            </ul>
+          </div>
         </div>
-    </footer>
+      </div>
+    </nav>
+  </header>
+  <div class="container">
+    <main role="main" class="pb-3">
+      @RenderBody()
+    </main>
+  </div>
 
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
+  <footer class="border-top footer text-muted">
+    <div class="container">
+      &copy; 2024 - MiddleMan.Web
+    </div>
+  </footer>
 
-    @await RenderSectionAsync("Scripts", required: false)
+  <script src="~/lib/jquery/dist/jquery.min.js"></script>
+  <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="~/js/site.js" asp-append-version="true"></script>
+
+  @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

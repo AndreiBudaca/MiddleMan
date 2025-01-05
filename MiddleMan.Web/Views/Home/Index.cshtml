@@ -4,15 +4,21 @@
 }
 
 <div class="text-center">
-  <h1 class="display-4">Welcome</h1>
-  <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-  @if (!(User.Identity?.IsAuthenticated ?? false))
-  {
-    <a href='@Url.Action("Login", "Authentication")'>Login</a>
-  }
-  else
-  {
-    <a href='@Url.Action("Logout", "Authentication")'>Logout</a>
-    <p>@User.Identifier().ToString()</p>
-  }
+  <h1 class="display-4" style="margin-bottom: 100px">Welcome</h1>
+
+  <div id="clients-container"></div>
 </div>
+
+@if (User?.Identity?.IsAuthenticated ?? false)
+{
+  <script>
+    (async () => {
+      const clientsResult = await fetch("@Url.Action("GetAll", "WebSockets")");
+      const clientsContent = await clientsResult.text();
+
+      const container = document.getElementById("clients-container");
+      container.innerHTML = clientsContent;
+      nodeScriptReplace(container);
+    })()
+  </script>
+}
