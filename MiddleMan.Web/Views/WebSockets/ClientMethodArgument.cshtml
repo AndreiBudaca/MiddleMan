@@ -7,14 +7,14 @@
 else
 {
   var guid = Guid.NewGuid();
-  
-  <div class="xyz-@guid">
-    <div class="card array">
+
+  <div class="xyz-@guid array" data-name="@Model.Name">
+    <div class="card">
       <div class="card-header">
         <span style="margin-right: 10px">@Model.Name (array) @(Model.IsNullable ? " - optional" : string.Empty)</span>
-        <button type="button" class="btn btn-secondary btn-sm add">+</button>
+        <button type="button" class="btn btn-secondary btn-sm add" style="display: @(ViewBag.DisableInputs ? "none" : "")">+</button>
       </div>
-      <ul class="list-group list-group-flush array-container" data-elements="0"></ul>
+      <ul class="list-group list-group-flush array-container"></ul>
     </div>
 
     <template>
@@ -27,7 +27,7 @@ else
           <div style="width: 98%;">
             @await Html.PartialAsync("ClientMethodSingleArgument", Model)
           </div>
-          <div>
+          <div style="display: @(ViewBag.DisableInputs ? "none" : "block")">
             <button type="button" class="btn btn-danger btn-sm delete">x</button>
           </div>
         </div>
@@ -41,8 +41,8 @@ else
         const body = container.querySelector('ul.array-container');
         const temp = container.querySelector('template');
 
-        button.removeEventListener("click", button.clickFunction);
-        button.clickFunction = () => {
+        button.removeEventListener("click", container.clickFunction);
+        container.clickFunction = () => {
           const clone = temp.content.querySelector("li.list-group-item").cloneNode(true);
 
           const child = body.appendChild(clone);
@@ -54,7 +54,7 @@ else
           nodeScriptReplace(child);
         }
 
-        button.addEventListener("click", button.clickFunction);
+        button.addEventListener("click", container.clickFunction);
       });
     })();
   </script>

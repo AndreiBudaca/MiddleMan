@@ -6,7 +6,7 @@
     <div class="accordion" id="accordion-@Model.Name">
       @foreach (var method in Model.Methods)
       {
-        <div class="accordion-item">
+        <div class="accordion-item client-method" data-target-url="/WebSockets/@Model.Name/@method.Name">
           <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-@Model.Name-@method.Name" aria-controls="collapse-@Model.Name-@method.Name">
               @method.Name
@@ -14,32 +14,35 @@
           </h2>
           <div id="collapse-@Model.Name-@method.Name" class="accordion-collapse collapse" aria-labelledby="heading-@method.Name" data-bs-parent="#accordion-@Model.Name">
             <div class="accordion-body">
-              <h5>Arguments</h5>
-              @{
-                ViewBag.DisableInputs = false;
+              @if (method.Arguments?.Count > 0)
+              {
+                {
+                  ViewBag.DisableInputs = false;
+                }
+                <h5>Arguments</h5>
+                <div class="card">
+                  <ul class="list-group list-group-flush">
+                    @foreach (var argument in method.Arguments)
+                    {
+                      <li class="list-group-item argument" style="margin-bottom: 0px !important">
+                        @await Html.PartialAsync("ClientMethodArgument", argument)
+                      </li>
+                    }
+                  </ul>
+                </div>
+                <br />
               }
-              <div class="card">
-                <ul class="list-group list-group-flush">
-                  @for (int i = 0; i < method.Arguments.Count; i++)
-                  {
-                    <li class="list-group-item argument" style="margin-bottom: 0px !important">
-                      @await Html.PartialAsync("ClientMethodArgument", method.Arguments[i])
-                    </li>
-                  }
-                </ul>
-              </div>
-              <br />
-              <button type="button" class="btn btn-secondary" data-client="@Model.Name" data-method="@method.Name">Call</button>
-              <br />
+              <button type="button" class="btn btn-secondary call-btn">Call</button>
               @if (method.Returns != null)
               {
                 {
                   ViewBag.DisableInputs = true;
                 }
+                <br />
                 <h5 style="margin-top: 10px">Result</h5>
-                <div class="card result">
+                <div class="card">
                   <ul class="list-group list-group-flush">
-                    <li class="list-group-item argument" style="margin-bottom: 0px !important">
+                    <li class="list-group-item result" style="margin-bottom: 0px !important">
                       @await Html.PartialAsync("ClientMethodArgument", method.Returns)
                     </li>
                   </ul>
@@ -52,5 +55,3 @@
     </div>
   </div>
 </div>
-
-<script></script>

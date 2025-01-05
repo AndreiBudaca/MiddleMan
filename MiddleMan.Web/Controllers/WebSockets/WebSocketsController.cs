@@ -20,13 +20,16 @@ namespace MiddleMan.Web.Controllers.WebSockets
 
     [HttpPost]
     [Route("{websocketClientName}/{method}")]
-    public async Task<IActionResult> Send([FromRoute] string websocketClientName, [FromRoute] string method, [FromBody] object data, CancellationToken cancellationToken)
+    public async Task<IActionResult> Send([FromRoute] string websocketClientName, [FromRoute] string method, [FromBody] object?[] args, CancellationToken cancellationToken)
     {
       if (string.IsNullOrWhiteSpace(websocketClientName)) return base.NotFound();
       if (string.IsNullOrWhiteSpace(method)) return NotFound();
 
       var websocketClient = await webSocketClientsService.GetWebSocketClient(User.Identifier(), websocketClientName);
       if (websocketClient == null) return NotFound();
+
+      var methodInfo = websocketClient.Methods.FirstOrDefault(m => m.Name == method);
+      if (methodInfo == null) return NotFound();
 
       if (string.IsNullOrWhiteSpace(websocketClient.ConnectionId)) return base.NotFound();
 
@@ -37,8 +40,16 @@ namespace MiddleMan.Web.Controllers.WebSockets
         return NotFound();
       }
 
-      var result = await hubClient.InvokeAsync<object>(method, data, cancellationToken);
-      return Ok(result);
+      if (methodInfo.Returns != null)
+      {
+        var result = await hubClient.InvokeCoreAsync<object>(method, args, cancellationToken);
+        return Ok(result);
+      }
+      else
+      {
+        await hubClient.SendCoreAsync(method, args, cancellationToken);
+        return NoContent();
+      }
     }
 
     [HttpGet]
