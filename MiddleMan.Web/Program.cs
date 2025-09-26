@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using MiddleMan.Web.Infrastructure.Attributes;
 using MiddleMan.Web.Infrastructure.Configuration;
 using MiddleMan.Web.Infrastructure.Tokens;
+using System.Net;
 
 namespace MiddleMan.Web
 {
@@ -49,11 +50,9 @@ namespace MiddleMan.Web
       if (!app.Environment.IsDevelopment())
       {
         app.UseExceptionHandler("/Error");
-        // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-        app.UseHsts();
       }
 
-      app.UseHttpsRedirection();
+      app.UseProxy();
 
       app.UseStaticFiles();
 
