@@ -27,7 +27,9 @@ function init() {
                 return;
             }
 
-            const json = await resp.json();
+            const text = await resp.text();
+            console.log(text)
+            const json = atob(text);
             const resultContainer = method.querySelector("li.result > div");
             if (!resultContainer) {
                 alert(`Function return a result, but none expected: ${json}`);
@@ -52,12 +54,15 @@ function getArrayArg(argElem) {
 
 function getPrimiveArg(argElem) {
     const type = argElem.dataset.type;
-    const nullable = argElem.dataset.nullable == 'True';
+    const isNullable = argElem.dataset.nullable == 'True';
+    const isNumeric = argElem.dataset.numeric == 'True';
+    const isBoolean = argElem.dataset.boolean == 'True';
+
     const val = argElem.querySelector("input").value;
 
-    if (val == '' && nullable) return null;
+    if (val == '' && isNullable) return null;
 
-    return getTypedValue(val, type);
+    return getTypedValue(val, type, isNumeric, isBoolean);
 }
 
 function getCompositeArg(argElem) {
@@ -71,11 +76,18 @@ function getCompositeArg(argElem) {
     return obj;
 }
 
-function getTypedValue(val, type) {
+function getTypedValue(val, type, isNumeric, isBoolean) {
     try {
-        if (type == 'integer') return Number.parseInt(val);
-        if (type == 'float') return Number.parseFloat(val);
-        if (type == 'boolean') return val == 'True'
+        if (isNumeric) {
+            let floatVal = Number.parseFloat(val);
+
+            if (Number.isInteger(floatVal)) {
+                return Number.parseInt(val);
+            }
+
+            return floatVal;
+        }
+        if (isBoolean) return val == 'True' || val == 'true' || val == '1';
         return val;
     } catch {
         alert(`${val} cannot be converted into a ${type}`)

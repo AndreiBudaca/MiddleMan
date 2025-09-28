@@ -5,6 +5,8 @@ using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Web.Controllers.WebSockets.Model;
 using MiddleMan.Web.Hubs;
 using MiddleMan.Web.Infrastructure.Identity;
+using System.Text;
+using System.Text.Json.Nodes;
 
 namespace MiddleMan.Web.Controllers.WebSockets
 {
@@ -20,7 +22,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
 
     [HttpPost]
     [Route("{websocketClientName}/{method}")]
-    public async Task<IActionResult> Send([FromRoute] string websocketClientName, [FromRoute] string method, [FromBody] object?[] args, CancellationToken cancellationToken)
+    public async Task<IActionResult> Send([FromRoute] string websocketClientName, [FromRoute] string method, CancellationToken cancellationToken)
     {
       if (string.IsNullOrWhiteSpace(websocketClientName)) return base.NotFound();
       if (string.IsNullOrWhiteSpace(method)) return NotFound();
@@ -40,16 +42,13 @@ namespace MiddleMan.Web.Controllers.WebSockets
         return NotFound();
       }
 
-      if (methodInfo.Returns != null)
-      {
-        var result = await hubClient.InvokeCoreAsync<object>(method, args, cancellationToken);
-        return Ok(result);
-      }
-      else
-      {
-        await hubClient.SendCoreAsync(method, args, cancellationToken);
-        return NoContent();
-      }
+      using var reader = new StreamReader(Request.Body);
+      var bytes = new byte[Request.ContentLength ?? 0];
+      await Request.Body.ReadAsync(bytes, cancellationToken);
+
+      var result = await hubClient.InvokeCoreAsync<byte[]>(method, [bytes], cancellationToken);
+     
+      return Ok(Convert.ToBase64String(result));
     }
 
     [HttpGet]

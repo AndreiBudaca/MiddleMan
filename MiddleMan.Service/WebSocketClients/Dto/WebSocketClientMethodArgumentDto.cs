@@ -10,6 +10,10 @@
 
     public bool IsNullable {  get; set; }
 
+    public bool IsNumeric { get; set; }
+
+    public bool IsBoolean { get; set; }
+
     public string? Type { get; set; }
 
     public List<WebSocketClientMethodArgumentDto> Components { get; set; } = [];

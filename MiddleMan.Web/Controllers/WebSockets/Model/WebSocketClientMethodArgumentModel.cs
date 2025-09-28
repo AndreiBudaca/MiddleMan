@@ -12,6 +12,10 @@ namespace MiddleMan.Web.Controllers.WebSockets.Model
 
     public bool IsNullable { get; set; }
 
+    public bool IsNumeric { get; set; }
+
+    public bool IsBoolean { get; set; }
+
     public string? Type { get; set; }
 
     public List<WebSocketClientMethodArgumentModel> Components { get; set; } = [];
@@ -24,6 +28,8 @@ namespace MiddleMan.Web.Controllers.WebSockets.Model
       IsPrimitive = dto.IsPrimitive;
       IsArray = dto.IsArray;
       IsNullable = dto.IsNullable;
+      IsNumeric = dto.IsNumeric;
+      IsBoolean = dto.IsBoolean;
       Type = dto.Type;
       Components = dto.Components.Select(x => new WebSocketClientMethodArgumentModel(x)).ToList();
     }
