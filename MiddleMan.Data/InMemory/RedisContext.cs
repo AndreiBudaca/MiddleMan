@@ -3,9 +3,9 @@ using MiddleMan.Core;
 using StackExchange.Redis;
 using System.Text.Json;
 
-namespace MiddleMan.Data.Redis
+namespace MiddleMan.Data.InMemory
 {
-  public class RedisContext : IRedisContext
+  public class RedisContext : IInMemoryContext
   {
     private readonly IDatabase database;
 
@@ -13,18 +13,6 @@ namespace MiddleMan.Data.Redis
     {
       ConnectionMultiplexer redis = ConnectionMultiplexer.Connect(configuration.GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis)!);
       database = redis.GetDatabase();
-    }
-
-    public async Task AddToList<T>(string listKey, T element)
-    {
-      var jsonData = JsonSerializer.Serialize(element);
-      await database.ListRightPushAsync(listKey, jsonData);
-    }
-
-    public async Task RemoveFromList<T>(string listKey, T element)
-    {
-      var jsonData = JsonSerializer.Serialize(element);
-      await database.ListRemoveAsync(listKey, jsonData);
     }
 
     public async Task<bool> ExistsInHash(string hashKey, string elementKey)

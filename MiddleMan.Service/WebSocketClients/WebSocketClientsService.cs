@@ -1,13 +1,12 @@
-﻿
-using MiddleMan.Data.Redis;
+﻿using MiddleMan.Data.InMemory;
 using MiddleMan.Service.WebSocketClients.Dto;
 
 namespace MiddleMan.Service.WebSocketClients
 {
-  public class WebSocketClientsService(IRedisContext redisContext) : IWebSocketClientsService
+  public class WebSocketClientsService(IInMemoryContext redisContext) : IWebSocketClientsService
   {
     private const string BASE_KEY = "WebSocketClients";
-    private readonly IRedisContext redisContext = redisContext;
+    private readonly IInMemoryContext redisContext = redisContext;
 
     public async Task AddWebSocketClient(string identifier, string name, WebSocketClientDataDto clientData)
     {

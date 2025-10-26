@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MiddleMan.Core\MiddleMan.Core.csproj" />
     <ProjectReference Include="..\MiddleMan.Data\MiddleMan.Data.csproj" />
   </ItemGroup>
 

@@ -2,10 +2,10 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using MiddleMan.Core;
 using MiddleMan.Web.Infrastructure.Attributes;
 using MiddleMan.Web.Infrastructure.Configuration;
 using MiddleMan.Web.Infrastructure.Tokens;
-using System.Net;
 
 namespace MiddleMan.Web
 {
@@ -21,7 +21,10 @@ namespace MiddleMan.Web
         options.Filters.Add(typeof(ModelValidatorAttribute));
       });
 
-      builder.Services.AddSignalR();
+      builder.Services.AddSignalR(options =>
+      {
+        options.MaximumReceiveMessageSize = ServerCapabilities.MaxContentLength;
+      });
 
       builder.Services.AddServices();
 

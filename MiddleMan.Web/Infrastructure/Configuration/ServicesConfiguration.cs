@@ -1,4 +1,6 @@
-﻿using MiddleMan.Data.Redis;
+﻿using MiddleMan.Data.InMemory;
+using MiddleMan.Service.Blobs;
+using MiddleMan.Service.WebSocketClientMethods;
 using MiddleMan.Service.WebSocketClients;
 
 namespace MiddleMan.Web.Infrastructure.Configuration
@@ -8,10 +10,12 @@ namespace MiddleMan.Web.Infrastructure.Configuration
     public static void AddServices(this IServiceCollection services)
     {
       // Add DB context
-      services.AddScoped<IRedisContext, RedisContext>();
+      services.AddScoped<IInMemoryContext, RedisContext>();
 
       // Add services
+      services.AddScoped<IBlobService, LocalFileSystemBlobService>();
       services.AddScoped<IWebSocketClientsService, WebSocketClientsService>();
+      services.AddScoped<IWebSocketClientMethodService, WebSocketClientMethodService>();
     }
   }
 }

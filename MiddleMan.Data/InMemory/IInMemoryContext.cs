@@ -1,11 +1,7 @@
-﻿
-namespace MiddleMan.Data.Redis
+﻿namespace MiddleMan.Data.InMemory
 {
-  public interface IRedisContext
+  public interface IInMemoryContext
   {
-    Task AddToList<T>(string listKey, T element);
-    Task RemoveFromList<T>(string listKey, T element);
-
     Task<bool> ExistsInHash(string hashKey, string elementKey);
     Task AddToHash<T>(string hashKey, string elementKey, T element);
     Task<T?> GetFromHash<T>(string hashKey, string elementKey);
