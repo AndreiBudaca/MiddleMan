@@ -1,0 +1,16 @@
+﻿using MiddleMan.Data.Persistance.Classes;
+
+namespace MiddleMan.Data.Persistance
+{
+  public interface IRepository<T, K>
+  {
+    Task<IEnumerable<T>> GetAllAsync();
+    Task<IEnumerable<T>> GetByContitions(List<ColumnInfo> searchValues);
+    Task<T?> GetByIdAsync(K key);
+    Task<bool> ExistsAsync(K key);
+    Task<K> AddAsync(T entity);
+    Task UpdateAsync(T entity);
+    Task UpdateAsync(K key, List<ColumnInfo> updateValues);
+    Task DeleteAsync(K key);
+  }
+}

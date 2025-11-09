@@ -400,3 +400,4 @@ FodyWeavers.xsd
 .env
 *.ps1
 Middleman.Web/websocket-client-methods/*
+*.db

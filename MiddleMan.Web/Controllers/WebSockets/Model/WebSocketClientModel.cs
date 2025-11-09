@@ -3,7 +3,5 @@
   public class WebSocketClientModel
   {
     public string? Name { get; set; }
-
-    public List<WebSocketClientMethodModel> Methods { get; set; } = [];
   }
 }

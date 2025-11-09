@@ -9,7 +9,14 @@ namespace MiddleMan.Web.Infrastructure.Configuration
     public static AuthenticationBuilder AddGoogleAuthentication(this AuthenticationBuilder builder, ConfigurationManager configuration)
     {
       return builder
-        .AddCookie()
+        .AddCookie(o =>
+        {
+          //o.Events.OnRedirectToLogin = context =>
+          //{
+          //  context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+          //  return Task.CompletedTask;
+          //};
+        })
         .AddGoogle(googleOptions =>
         {
           googleOptions.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;

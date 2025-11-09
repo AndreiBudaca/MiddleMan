@@ -28,9 +28,6 @@ namespace MiddleMan.Web.Controllers.WebSockets
       var websocketClient = await webSocketClientsService.GetWebSocketClient(User.Identifier(), websocketClientName);
       if (websocketClient == null) return NotFound();
 
-      var methodInfo = websocketClient.Methods.FirstOrDefault(m => m.Name == method);
-      if (methodInfo == null) return NotFound();
-
       if (string.IsNullOrWhiteSpace(websocketClient.ConnectionId)) return base.NotFound();
 
       var hubClient = hubContext.Clients.Client(websocketClient.ConnectionId);
@@ -54,18 +51,32 @@ namespace MiddleMan.Web.Controllers.WebSockets
     {
       var clients = await webSocketClientsService.GetWebSocketClients(User.Identifier());
 
-      var model = clients.Select(c => new WebSocketClientModel
+      var model = clients.Select(client => new WebSocketClientDetailsModel
       {
-        Name = c.Name,
-        Methods = c.Methods.Select(m => new WebSocketClientMethodModel
-        {
-          Name = m.Name,
-          Arguments = m.Arguments.Select(x => new WebSocketClientMethodArgumentModel(x)).ToList(),
-          Returns = m.Returns != null ? new WebSocketClientMethodArgumentModel(m.Returns) : null
-        }).ToList()
-      }).ToList();
+        Name = client.Name,
+        MethodsUrl = client.MethodsUrl,
+        IsConnected = client.IsConnected,
+      });
 
-      return PartialView(model);
+      return Ok(model);
+    }
+
+    [HttpGet]
+    [Route("{websocketClientName}")]
+    public async Task<IActionResult> GetClientDetails(string websocketClientName)
+    {
+      var client = await webSocketClientsService.GetWebSocketClient(User.Identifier(), websocketClientName);
+
+      if (client == null) return NotFound();
+
+      var model = new WebSocketClientDetailsModel
+      {
+        Name = client.Name,
+        MethodsUrl = client.MethodsUrl,
+        IsConnected = client.IsConnected,
+      };
+
+      return Ok(model);
     }
   }
 }

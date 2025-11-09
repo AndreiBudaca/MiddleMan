@@ -1,34 +1,50 @@
 ﻿using MiddleMan.Core;
 using MiddleMan.Core.Extensions;
+using MiddleMan.Data.Persistance;
+using MiddleMan.Data.Persistance.Classes;
+using MiddleMan.Data.Persistance.Entities;
 using MiddleMan.Service.Blobs;
 using MiddleMan.Service.WebSocketClientMethods.Classes;
 using MiddleMan.Service.WebSocketClientMethods.Constants;
 
 namespace MiddleMan.Service.WebSocketClientMethods
 {
-  public class WebSocketClientMethodService(IBlobService blobService) : IWebSocketClientMethodService
+  public class WebSocketClientMethodService(IClientRepository clientRepository, IBlobService blobService) : IWebSocketClientMethodService
   {
+    private readonly IClientRepository _clientRepository = clientRepository;
     private readonly IBlobService _blobService = blobService;
-
-    private static Dictionary<string, byte[]> _methodSignaturesCache = new();
 
     public async Task ReceiveMethodsAsync(string identifier, string name, IAsyncEnumerable<byte[]> methodChunks, CancellationToken cancellationToken)
     {
-      var key = $"{identifier}_{name}";
+      var client = await _clientRepository.GetByIdAsync((identifier, name)) ?? throw new InvalidOperationException($"Client {identifier}:{name} not found.");
 
-      var metadataBytes = await methodChunks.EnumerateUntil(4, 0, cancellationToken);
+      var metadataBytes = await methodChunks.EnumerateUntil(35, 0, cancellationToken);
 
       var metadata = GetMetadata(metadataBytes.Received);
       if (!ServerCapabilities.AllowedVersions.Contains(metadata.Version)) throw new NotSupportedException($"Version {metadata.Version} is not supported.");
       if (metadata.Operation == MethodPackConstants.Operations.OK) return;
 
-      var signatureBytes = await methodChunks.PrependItems(cancellationToken, metadataBytes.CurrentEnumerationItem)
-        .EnumerateUntil(metadata.MethodCount * 32, 0, cancellationToken);
+      var newFileInfo = await _blobService.UploadBlob(ServerCapabilities.StaticFilesPath, $"websocket-client-methods{Path.DirectorySeparatorChar}{identifier}_{name}_methods_{Guid.NewGuid()}.bin",
+        methodChunks.PrependItems(cancellationToken, [metadata.Version, metadata.MethodCount], metadataBytes.CurrentEnumerationItem), cancellationToken);
 
-      SaveSignatures(key, signatureBytes.Received);
+      if (client?.MethodInfoUrl is not null)
+      {
+        await _blobService.DeleteBlob(ServerCapabilities.StaticFilesPath, client.MethodInfoUrl);
+      }
 
-      await _blobService.UploadBlob("websocket-client-methods", $"{identifier}_{name}_methods.bin",
-        methodChunks.PrependItems(cancellationToken, [metadata.Version], BitConverter.GetBytes(metadata.MethodCount), signatureBytes.CurrentEnumerationItem), cancellationToken);
+      await _clientRepository.UpdateAsync((identifier, name),
+       [
+         new ColumnInfo
+          {
+            ColumnName = Client.Columns.Signatures,
+            Value = metadata.Signature,
+          },
+           new ColumnInfo
+          {
+            ColumnName = Client.Columns.MethodInfoUrl,
+            Value = newFileInfo.RelativeUrl,
+          },
+        ]);
     }
 
     private static MethodMetadataDto GetMetadata(byte[] metadataBytes)
@@ -37,13 +53,9 @@ namespace MiddleMan.Service.WebSocketClientMethods
       {
         Version = metadataBytes[0],
         Operation = metadataBytes[1],
-        MethodCount = BitConverter.ToInt16(metadataBytes, 2)
+        Signature = [.. metadataBytes.Skip(2).Take(32)],
+        MethodCount = metadataBytes[34],
       };
-    }
-
-    private static void SaveSignatures(string key, byte[] bytes)
-    {
-      _methodSignaturesCache[key] = bytes;
     }
   }
 }

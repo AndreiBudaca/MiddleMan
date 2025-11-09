@@ -15,16 +15,29 @@ namespace MiddleMan.Web
     {
       var builder = WebApplication.CreateBuilder(args);
 
-      // Add services to the container.
-      builder.Services.AddControllersWithViews(options =>
+      if (builder.Environment.IsDevelopment())
       {
-        options.Filters.Add(typeof(ModelValidatorAttribute));
-      });
+        builder.Services.AddCors(options =>
+        {
+          options.AddDefaultPolicy(policy =>
+          {
+            policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+          });
+        });
+      }
+
+      builder.Services
+        .AddControllers(options =>
+        {
+          options.Filters.Add(typeof(ModelValidatorAttribute));
+        });
 
       builder.Services.AddSignalR(options =>
       {
-        options.MaximumReceiveMessageSize = ServerCapabilities.MaxContentLength;
-      });
+        options.StreamBufferCapacity = 1;
+      }).AddMessagePackProtocol();
 
       builder.Services.AddServices();
 
@@ -57,9 +70,14 @@ namespace MiddleMan.Web
 
       app.UseProxy();
 
-      app.UseStaticFiles();
+      app.MapStaticFiles(ServerCapabilities.UIStaticFilesPath, ServerCapabilities.StaticFilesPath);
 
       app.UseRouting();
+
+      if (app.Environment.IsDevelopment())
+      {
+        app.UseCors();
+      }
 
       app.UseAuthentication();
 
@@ -68,6 +86,8 @@ namespace MiddleMan.Web
       app.MapControllers();
 
       app.MapHubs();
+
+      app.InitializeDb();
 
       app.Run();
     }

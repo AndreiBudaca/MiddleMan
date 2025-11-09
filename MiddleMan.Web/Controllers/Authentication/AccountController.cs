@@ -12,14 +12,11 @@ namespace MiddleMan.Web.Controllers.Authentication
 {
   [Route("[controller]")]
   [Authorize]
-  public class AuthenticationController : Controller
+  public class AccountController : Controller
   {
     private readonly IConfiguration configuration;
 
-    public AuthenticationController(IConfiguration configuration)
-    {
-      this.configuration = configuration;
-    }
+    public AccountController(IConfiguration configuration) => this.configuration = configuration;
 
     [HttpGet]
     [AllowAnonymous]
@@ -62,3 +59,4 @@ namespace MiddleMan.Web.Controllers.Authentication
     }
   }
 }
+

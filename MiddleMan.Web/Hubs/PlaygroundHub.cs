@@ -16,53 +16,41 @@ namespace MiddleMan.Web.Hubs
     private readonly IWebSocketClientsService _webSocketClientsService = webSocketClientsService;
     private readonly IWebSocketClientMethodService _webSocketClientMethodService = webSocketClientMethodService;
 
-    public async Task AddMethodInfo(List<WebSocketClientMethodDto> methods)
+    public override async Task OnConnectedAsync()
     {
-      var id = Context.User?.Identifier() ?? string.Empty;
-      var name = Context.User?.Name() ?? string.Empty;
+      var id = Context.User!.Identifier();
+      var name = Context.User!.Name();
 
-      if (!await _webSocketClientsService.ExistsWebSocketClient(id, name)) return;
+      var existingClientConnection = await _webSocketClientsService.GetWebSocketClientConnection(id, name);
 
-      await _webSocketClientsService.AddWebSocketClient(id, name, new WebSocketClientDataDto
+      if (existingClientConnection is not null)
+      {
+        throw new HubException($"A second client with the same name tried to connect. ID = {id}, Name = {name}");
+      }
+
+      await _webSocketClientsService.AddWebSocketClient(id, name, new WebSocketClientConnectionDataDto
       {
         ConnectionId = Context.ConnectionId,
-        Methods = methods
       });
     }
 
     public async Task Methods(ChannelReader<byte[]> channelReader)
     {
-      var id = Context.User?.Identifier() ?? string.Empty;
-      var name = Context.User?.Name() ?? string.Empty;
+      var id = Context.User!.Identifier();
+      var name = Context.User!.Name();
 
       await _webSocketClientMethodService.ReceiveMethodsAsync(id, name, channelReader.ReadAllAsync(), CancellationToken.None);
     }
 
-    public async Task<byte[]> Signatures()
+    public byte[] Signatures()
     {
       return [0x00, 0x00, 0x00];
     }
 
-    public override async Task OnConnectedAsync()
-    {
-      var id = Context.User?.Identifier() ?? string.Empty;
-      var name = Context.User?.Name() ?? string.Empty;
-
-      if (await _webSocketClientsService.ExistsWebSocketClient(id, name))
-      {
-        throw new HubException($"A second client with the same name tried to connect. ID = {id}, Name = {name}");
-      }
-
-      await _webSocketClientsService.AddWebSocketClient(id, name, new WebSocketClientDataDto
-      {
-        ConnectionId = Context.ConnectionId,
-      });
-    }
-
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-      var id = Context.User?.Identifier() ?? string.Empty;
-      var name = Context.User?.Name() ?? string.Empty;
+      var id = Context.User!.Identifier();
+      var name = Context.User!.Name();
 
       await _webSocketClientsService.DeleteWebSocketClient(id, name);
     }

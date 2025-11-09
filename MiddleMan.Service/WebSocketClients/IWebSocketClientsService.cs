@@ -4,14 +4,14 @@ namespace MiddleMan.Service.WebSocketClients
 {
   public interface IWebSocketClientsService
   {
-    Task<bool> ExistsWebSocketClient(string identifier, string name);
+    Task AddWebSocketClient(string identifier, string name, WebSocketClientConnectionDataDto clientData);
+   
+    Task<IEnumerable<WebSocketClientDetailsDto>> GetWebSocketClients(string identifier);
+    
+    Task<WebSocketClientConnectionDataDto?> GetWebSocketClientConnection(string identifier, string name);
 
-    Task AddWebSocketClient(string identifier, string name, WebSocketClientDataDto clientData);
-
+    Task<WebSocketClientDetailsDto?> GetWebSocketClient(string identifier, string name);
+    
     Task DeleteWebSocketClient(string identifier, string name);
-
-    Task<List<WebSocketClientDto>> GetWebSocketClients(string identifier);
-
-    Task<WebSocketClientDto?> GetWebSocketClient(string identifier, string name);
   }
 }
