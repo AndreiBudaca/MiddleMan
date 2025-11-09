@@ -1,4 +1,4 @@
-﻿namespace MiddleMan.Web.Controllers.WebSockets.Model
+﻿namespace MiddleMan.Web.Controllers.Clients.Model
 {
   public class WebSocketClientModel
   {

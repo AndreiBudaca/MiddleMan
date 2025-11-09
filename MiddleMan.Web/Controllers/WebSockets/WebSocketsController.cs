@@ -2,7 +2,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Service.WebSocketClients;
-using MiddleMan.Web.Controllers.WebSockets.Model;
 using MiddleMan.Web.Hubs;
 using MiddleMan.Web.Infrastructure.Identity;
 
@@ -44,39 +43,6 @@ namespace MiddleMan.Web.Controllers.WebSockets
       var result = await hubClient.InvokeCoreAsync<byte[]>(method, [bytes], cancellationToken);
      
       return Ok(Convert.ToBase64String(result));
-    }
-
-    [HttpGet]
-    public async Task<IActionResult> GetAll()
-    {
-      var clients = await webSocketClientsService.GetWebSocketClients(User.Identifier());
-
-      var model = clients.Select(client => new WebSocketClientDetailsModel
-      {
-        Name = client.Name,
-        MethodsUrl = client.MethodsUrl,
-        IsConnected = client.IsConnected,
-      });
-
-      return Ok(model);
-    }
-
-    [HttpGet]
-    [Route("{websocketClientName}")]
-    public async Task<IActionResult> GetClientDetails(string websocketClientName)
-    {
-      var client = await webSocketClientsService.GetWebSocketClient(User.Identifier(), websocketClientName);
-
-      if (client == null) return NotFound();
-
-      var model = new WebSocketClientDetailsModel
-      {
-        Name = client.Name,
-        MethodsUrl = client.MethodsUrl,
-        IsConnected = client.IsConnected,
-      };
-
-      return Ok(model);
     }
   }
 }
