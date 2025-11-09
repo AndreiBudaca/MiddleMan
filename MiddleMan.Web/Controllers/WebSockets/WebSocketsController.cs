@@ -8,7 +8,7 @@ using MiddleMan.Web.Infrastructure.Identity;
 namespace MiddleMan.Web.Controllers.WebSockets
 {
   [Authorize]
-  [Route("[controller]")]
+  [Route("api/websockets")]
   public class WebSocketsController(
     IHubContext<PlaygroundHub> hubContext,
     IWebSocketClientsService webSocketClientsService

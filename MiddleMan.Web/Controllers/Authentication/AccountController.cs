@@ -2,26 +2,18 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MiddleMan.Core;
-using MiddleMan.Web.Controllers.Authentication.Model;
-using MiddleMan.Web.Infrastructure.Identity;
-using MiddleMan.Web.Infrastructure.Tokens;
-using MiddleMan.Web.Infrastructure.Tokens.Model;
 
 namespace MiddleMan.Web.Controllers.Authentication
 {
-  [Route("account")]
   [AllowAnonymous]
-  public class AccountController(IConfiguration configuration) : Controller
+  [Route("api/account")]
+  public class AccountController : Controller
   {
-    private readonly IConfiguration configuration = configuration;
-
     [HttpGet]
     [Route("login")]
     public IActionResult Login()
     {
-      if (User.Identity?.IsAuthenticated ?? false)
-        return RedirectToAction("Index", "Home");
+      if (User.Identity?.IsAuthenticated ?? false) return Redirect("/");
 
       return Challenge();
     }

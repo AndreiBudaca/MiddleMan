@@ -11,7 +11,7 @@ using MiddleMan.Web.Infrastructure.Tokens.Model;
 namespace MiddleMan.Web.Controllers.Clients
 {
   [Authorize]
-  [Route("[controller]")]
+  [Route("api/clients")]
   public class ClientsController(
     IWebSocketClientsService webSocketClientsService,
     IConfiguration configuration
