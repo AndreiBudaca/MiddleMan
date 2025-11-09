@@ -1,4 +1,6 @@
-﻿namespace MiddleMan.Service.Blobs
+﻿using MiddleMan.Service.Blobs.Dto;
+
+namespace MiddleMan.Service.Blobs
 {
   public class LocalFileSystemBlobService() : IBlobService
   {
@@ -17,7 +19,7 @@
 
       return new BlobInfoDto
       {
-        AbsoluteUrl = filePath,
+        AbsoluteUrl = $"{container}/{blob}",
         RelativeUrl = blob,
       };
     }

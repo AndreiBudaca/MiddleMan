@@ -1,4 +1,4 @@
-﻿namespace MiddleMan.Service.Blobs
+﻿namespace MiddleMan.Service.Blobs.Dto
 {
   public class BlobInfoDto
   {

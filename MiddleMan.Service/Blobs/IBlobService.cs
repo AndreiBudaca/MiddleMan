@@ -1,4 +1,6 @@
-﻿namespace MiddleMan.Service.Blobs
+﻿using MiddleMan.Service.Blobs.Dto;
+
+namespace MiddleMan.Service.Blobs
 {
   public interface IBlobService
   {

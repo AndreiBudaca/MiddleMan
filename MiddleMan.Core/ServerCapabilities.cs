@@ -6,8 +6,8 @@
 
     public static readonly int[] AllowedVersions = [0];
 
-    public static string StaticFilesPath => Environment.GetEnvironmentVariable("LOCAL_BLOB_PATH") ?? Directory.GetCurrentDirectory();
+    public static string StaticFilesPath => Environment.GetEnvironmentVariable("LOCAL_BLOB_PATH") ?? $"{Directory.GetCurrentDirectory()}/blobs";
 
-    public static string UIStaticFilesPath => $"{StaticFilesPath}{Path.DirectorySeparatorChar}ClientApp{Path.DirectorySeparatorChar}build{Path.DirectorySeparatorChar}client";
+    public static string UIStaticFilesPath => $"{Directory.GetCurrentDirectory()}/ClientApp/build/client";
   }
 }
