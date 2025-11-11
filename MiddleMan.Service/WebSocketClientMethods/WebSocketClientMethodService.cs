@@ -25,7 +25,7 @@ namespace MiddleMan.Service.WebSocketClientMethods
       if (metadata.Operation == MethodPackConstants.Operations.OK) return;
 
       var newFileInfo = await _blobService.UploadBlob(ServerCapabilities.StaticFilesPath, $"websocket-client-methods{Path.DirectorySeparatorChar}{identifier}_{name}_methods_{Guid.NewGuid()}.bin",
-        methodChunks.PrependItems(cancellationToken, [metadata.Version, metadata.MethodCount], metadataBytes.CurrentEnumerationItem), cancellationToken);
+        methodChunks.PrependItems(cancellationToken, metadataBytes.Received, metadataBytes.CurrentEnumerationItem), cancellationToken);
 
       if (client?.MethodInfoUrl is not null)
       {

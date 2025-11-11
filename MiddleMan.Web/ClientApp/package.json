@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "react-router build --mode production",
-    "dev": "react-router dev --mode development",
-    "start": "react-router-serve ./build/server/index.js",
+    "build:dev": "react-router build --mode development",
+    "watch": "nodemon --watch app --ext js,jsx,ts,tsx,css,json --exec \"npm run build:dev\"",
     "typecheck": "react-router typegen && tsc"
   },
   "dependencies": {
@@ -17,7 +17,9 @@
     "@react-router/node": "^7.9.2",
     "@react-router/serve": "^7.9.2",
     "isbot": "^5.1.31",
+    "json-edit-react": "^1.29.0",
     "react": "^19.1.1",
+    "react-ace": "^14.0.1",
     "react-dom": "^19.1.1",
     "react-router": "^7.9.2"
   },
@@ -27,6 +29,7 @@
     "@types/node": "^22",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
+    "nodemon": "^3.1.10",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.9.2",
     "vite": "^7.1.7",

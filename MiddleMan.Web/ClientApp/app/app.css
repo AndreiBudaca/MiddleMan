@@ -7,7 +7,7 @@
 
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  background-color: rgb(13, 17, 23);
 
   @media (prefers-color-scheme: dark) {
     color-scheme: dark;

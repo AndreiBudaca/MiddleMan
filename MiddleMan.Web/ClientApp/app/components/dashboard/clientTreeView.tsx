@@ -1,9 +1,11 @@
 import { Box } from "@mui/material";
-import { SimpleTreeView, TreeItem } from "@mui/x-tree-view";
+import { RichTreeView, type TreeViewBaseItem } from "@mui/x-tree-view";
+import { mapToTreeNodes } from "~/mappers/clientMapper";
+import type { ClientWithMethods } from "~/services/clients/contracts/client";
 
-export interface ClientTreeViewProps 
-{
-    nodes: TreeNode[];
+export interface ClientTreeViewProps {
+  clients: ClientWithMethods[];
+  onNodeSelected: (path: string) => void;
 }
 
 export interface TreeNode {
@@ -11,24 +13,23 @@ export interface TreeNode {
   children?: TreeNode[];
 }
 
-export default function ClientTreeView({ nodes }: ClientTreeViewProps) {
+export default function ClientTreeView({
+  clients,
+  onNodeSelected,
+}: ClientTreeViewProps) {
+
+  const mapNode = (node: TreeNode, selector: string | null = null): TreeViewBaseItem => {
+    const currentSelector = selector ? `${selector}/${node.label}` : node.label;
+    return {
+      id: currentSelector,
+      label: node.label,
+      children: node.children?.map(c => mapNode(c, currentSelector))
+    }
+  }
+
   return (
     <Box sx={{ minHeight: 352, minWidth: 250 }}>
-      <SimpleTreeView>{renderTree(nodes)}</SimpleTreeView>
+      <RichTreeView items={mapToTreeNodes(clients)} onItemClick={(e, id) => onNodeSelected(id)} />
     </Box>
-  );
-}
-
-function renderTree(nodes: TreeNode[], selector: string = "") {
-  const currentSelector = (node: TreeNode) => `${selector}-${node.label}`;
-
-  return nodes.map((node, index) =>
-    node.children && node.children.length > 0 ? (
-      <TreeItem key={index} itemId={currentSelector(node)} label={node.label}>
-        {renderTree(node.children, currentSelector(node))}
-      </TreeItem>
-    ) : (
-      <TreeItem key={index} itemId={currentSelector(node)} label={node.label} />
-    )
   );
 }

@@ -11,6 +11,7 @@ import AppToolbar from "./layout/toolbar";
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { Box } from "@mui/material";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -36,7 +37,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <AppToolbar isLoggedIn={true} />
-        {children}
+        <Box display="flex" justifyContent="center" padding="0px 20px 0px 20px">
+          <Box maxWidth="1200px" width="100%">
+            {children}
+          </Box>
+        </Box>
         <ScrollRestoration />
         <Scripts />
       </body>
