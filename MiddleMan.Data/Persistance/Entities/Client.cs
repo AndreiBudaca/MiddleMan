@@ -8,11 +8,11 @@
 
     public string? MethodInfoUrl { get; set; }
 
-    public required DateTime LastConnectedAt { get; set; }
-
-    public required bool IsConnected { get; set; }
+    public DateTime? LastConnectedAt { get; set; }
 
     public byte[]? Signatures { get; set; }
+
+    public byte[]? TokenHash { get; set; }
 
     public class Columns
     {
@@ -20,8 +20,8 @@
       public const string Name = "Name";
       public const string MethodInfoUrl = "MethodInfoUrl";
       public const string LastConnectedAt = "LastConnectedAt";
-      public const string IsConnected = "IsConnected";
       public const string Signatures = "Signatures";
+      public const string TokenHash = "TokenHash";
     }
   }
 }

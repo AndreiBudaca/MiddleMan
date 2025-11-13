@@ -20,6 +20,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Folder Include="Controllers\Authentication\Model\" />
 		<Folder Include="wwwroot\js\app\Authentication\" />
 	</ItemGroup>
 </Project>

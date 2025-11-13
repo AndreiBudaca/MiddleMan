@@ -12,7 +12,7 @@ import MenuItem from "@mui/material/MenuItem";
 
 const pages = [
   { name: "Dashboard", link: "/" },
-  { name: "Client management", link: "/" },
+  { name: "Client management", link: "/clients" },
 ];
 
 export interface AppToolbarProps {
@@ -82,27 +82,31 @@ function AppToolbar({ isLoggedIn }: AppToolbarProps) {
               sx={{ display: { xs: "block", md: "none" } }}
             >
               {pages.map((page) => (
-                <MenuItem key={page.name} onClick={handleCloseNavMenu}>
-                  <Typography sx={{ textAlign: "center" }}>{page.name}</Typography>
-                </MenuItem>
+                <a href={page.link}>
+                  <MenuItem key={page.name} onClick={handleCloseNavMenu}>
+                    <Typography sx={{ textAlign: "center" }}>
+                      {page.name}
+                    </Typography>
+                  </MenuItem>
+                </a>
               ))}
             </Menu>
           </Box>
           <Box sx={{ flexGrow: 1, display: { xs: "none", md: "flex" } }}>
             {pages.map((page) => (
-              <Button
-                key={page.name}
-                onClick={handleCloseNavMenu}
-                sx={{ my: 2, color: "white", display: "block" }}
-              >
-                {page.name}
-              </Button>
+              <a href={page.link}>
+                <Button
+                  key={page.name}
+                  onClick={handleCloseNavMenu}
+                  sx={{ my: 2, color: "white", display: "block" }}
+                >
+                  {page.name}
+                </Button>
+              </a>
             ))}
           </Box>
           <Box sx={{ flexGrow: 0 }}>
-            <Button
-              sx={{ my: 2, color: "white", display: "block" }}
-            >
+            <Button sx={{ my: 2, color: "white", display: "block" }}>
               {isLoggedIn ? "Logout" : "Login"}
             </Button>
           </Box>

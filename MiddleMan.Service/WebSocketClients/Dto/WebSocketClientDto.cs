@@ -4,12 +4,12 @@
   {
     public string? Name { get; set; }
 
-    public WebSocketClientDto() { }
+    public string? MethodsUrl { get; set; }
 
-    public WebSocketClientDto(string name, WebSocketClientConnectionDataDto? clientData) 
-    {
-      Name = name;
-      ConnectionId = clientData?.ConnectionId;
-    }
+    public DateTime? LastConnectedAt { get; set; }
+
+    public byte[]? Signature { get; set; }
+
+    public byte[]? TokenHash { get; set; }
   }
 }

@@ -32,7 +32,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
       var hubClient = hubContext.Clients.Client(websocketClient.ConnectionId);
       if (hubClient == null)
       {
-        await webSocketClientsService.DeleteWebSocketClient(User.Identifier(), websocketClientName);
+        await webSocketClientsService.DeleteWebSocketClientConnection(User.Identifier(), websocketClientName);
         return NotFound();
       }
 

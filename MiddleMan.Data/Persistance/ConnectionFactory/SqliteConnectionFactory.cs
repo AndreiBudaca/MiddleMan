@@ -30,9 +30,9 @@ namespace MiddleMan.Data.Persistance.ConnectionFactory
             UserId TEXT NOT NULL,
             Name TEXT NOT NULL,
             MethodInfoUrl TEXT,
-            LastConnectedAt TEXT NOT NULL,
-            IsConnected INTEGER NOT NULL,
+            LastConnectedAt TEXT NULL,
             Signatures BLOB,
+            TokenHash BLOB,
             PRIMARY KEY (UserId, Name)
         );";
         tableCmd.ExecuteNonQuery();

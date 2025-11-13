@@ -3,7 +3,8 @@ using MiddleMan.Data.Persistance;
 using MiddleMan.Data.Persistance.Classes;
 using MiddleMan.Data.Persistance.Entities;
 using MiddleMan.Service.WebSocketClients.Dto;
-using System.Xml.Linq;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace MiddleMan.Service.WebSocketClients
 {
@@ -13,53 +14,36 @@ namespace MiddleMan.Service.WebSocketClients
     private readonly IInMemoryContext memoryContext = memoryContext;
     private readonly IClientRepository clientRepository = clientRepository;
 
-    public async Task AddWebSocketClient(string identifier, string name, WebSocketClientConnectionDataDto clientData)
+    public async Task AddWebSocketClientConnection(string identifier, string name, WebSocketClientConnectionDataDto clientData)
     {
+      await clientRepository.UpdateAsync((identifier, name),
+        [
+          new ColumnInfo
+          {
+            ColumnName = Client.Columns.LastConnectedAt,
+            Value = DateTime.UtcNow,
+          }
+        ]);
+
       await memoryContext.AddToHash(WebSocketClientKey(identifier), name, clientData);
-
-      var isExistingClient = await clientRepository.ExistsAsync((identifier, name));
-      var client = new Client
-      {
-        IsConnected = true,
-        LastConnectedAt = DateTime.UtcNow,
-        Name = name,
-        UserId = identifier,
-      };
-
-      if (isExistingClient)
-      {
-        await clientRepository.UpdateAsync((identifier, name),
-          [
-            new ColumnInfo
-            {
-              ColumnName = Client.Columns.IsConnected,
-              Value = client.IsConnected
-            },
-            new ColumnInfo
-            {
-              ColumnName = Client.Columns.LastConnectedAt,
-              Value = client.LastConnectedAt
-            }
-          ]);
-      }
-      else
-      {
-        await clientRepository.AddAsync(client);
-      }
     }
 
-    public async Task DeleteWebSocketClient(string identifier, string name)
+    public async Task<WebSocketClientDto> AddWebSocketClient(NewWebSockerClientDto newClient)
     {
-      await memoryContext.RemoveFromHash(WebSocketClientKey(identifier), name);
+      var client = new Client
+      {
+        UserId = newClient.Identifier,
+        Name = newClient.Name,
+      };
 
-      await clientRepository.UpdateAsync((identifier, name),
-         [
-           new ColumnInfo
-            {
-              ColumnName = Client.Columns.IsConnected,
-              Value = false
-            },
-         ]);
+      await clientRepository.AddAsync(client);
+
+      return BuildDto(client, null);
+    }
+
+    public Task<bool> ExistsWebSocketClients(string identifier, string name)
+    {
+      return clientRepository.ExistsAsync((identifier, name));
     }
 
     public Task<WebSocketClientConnectionDataDto?> GetWebSocketClientConnection(string identifier, string name)
@@ -67,23 +51,16 @@ namespace MiddleMan.Service.WebSocketClients
       return memoryContext.GetFromHash<WebSocketClientConnectionDataDto>(WebSocketClientKey(identifier), name);
     }
 
-    public async Task<WebSocketClientDetailsDto?> GetWebSocketClient(string identifier, string name)
+    public async Task<WebSocketClientDto?> GetWebSocketClient(string identifier, string name)
     {
       var clientConnection = await memoryContext.GetFromHash<WebSocketClientConnectionDataDto>(WebSocketClientKey(identifier), name);
       var clientData = await clientRepository.GetByIdAsync((identifier, name));
 
-      if (clientData == null && clientData == null) return null;
-
-      return new WebSocketClientDetailsDto
-      {
-        Name = name,
-        ConnectionId = clientConnection?.ConnectionId,
-        MethodsUrl = clientData?.MethodInfoUrl,
-        IsConnected = (clientData?.IsConnected ?? false) && clientConnection is not null,
-      };
+      if (clientData == null) return null;
+      return BuildDto(clientData, clientConnection);
     }
 
-    public async Task<IEnumerable<WebSocketClientDetailsDto>> GetWebSocketClients(string identifier)
+    public async Task<IEnumerable<WebSocketClientDto>> GetWebSocketClients(string identifier)
     {
       var clientconnections = await memoryContext.GetAllFromHash<WebSocketClientConnectionDataDto>(WebSocketClientKey(identifier));
       var clientData = await clientRepository.GetByContitions([new ColumnInfo
@@ -94,18 +71,54 @@ namespace MiddleMan.Service.WebSocketClients
 
       return clientData.Select(clientData =>
       {
-        clientconnections.TryGetValue(clientData.Name, out var clientConnection);
-
-        return new WebSocketClientDetailsDto
-        {
-          Name = clientData.Name,
-          ConnectionId = clientConnection?.ConnectionId,
-          MethodsUrl = clientData?.MethodInfoUrl,
-          IsConnected = (clientData?.IsConnected ?? false) && clientConnection is not null,
-        };
+        _ = clientconnections.TryGetValue(clientData.Name, out var clientConnection);
+        return BuildDto(clientData, clientConnection);
       });
     }
 
+    public async Task UpdateWebSocketClientToken(string identifier, string name, string? token)
+    {
+      var newToken = token != null ?
+        SHA256.HashData(Encoding.ASCII.GetBytes(token)) :
+        null;
+
+      await clientRepository.UpdateAsync
+      (
+        (identifier, name),
+        [
+          new ColumnInfo
+          {
+            ColumnName = Client.Columns.TokenHash,
+            Value = newToken,
+          }
+        ]
+      );
+    }
+
+    public async Task DeleteWebSocketClient(string identifier, string name)
+    {
+      await clientRepository.DeleteAsync((identifier, name));
+      await DeleteWebSocketClientConnection(identifier, name);
+    }
+    
+    public async Task DeleteWebSocketClientConnection(string identifier, string name)
+    {
+      await memoryContext.RemoveFromHash(WebSocketClientKey(identifier), name);
+    }
+
     private static string WebSocketClientKey(string id) => $"{BASE_KEY}-{id}";
+
+    private static WebSocketClientDto BuildDto(Client client, WebSocketClientConnectionDataDto? connectionInfo)
+    {
+      return new WebSocketClientDto
+      {
+        Name = client.Name,
+        ConnectionId = connectionInfo?.ConnectionId,
+        MethodsUrl = client.MethodInfoUrl,
+        LastConnectedAt = client.LastConnectedAt,
+        Signature = client.Signatures,
+        TokenHash = client.TokenHash,
+      };
+    }
   }
 }
