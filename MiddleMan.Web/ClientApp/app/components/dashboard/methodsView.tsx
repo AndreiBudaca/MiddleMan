@@ -36,7 +36,7 @@ export default function MethodsView({ client, method, isCallable }: MethodsViewP
 
   return (
     <Box minWidth="300px" width="60%">
-      {method ? <p>{method.name}</p> : <p>Select a method</p>}
+      {method && <Typography variant="body1">{method.name}</Typography>}
       {methodParams && (
         <JsonEditor
           data={methodParams}

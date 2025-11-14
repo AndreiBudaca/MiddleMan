@@ -1,4 +1,4 @@
-﻿namespace MiddleMan.Data.Persistance.Entities
+﻿namespace MiddleMan.Data.Persistency.Entities
 {
   public class Client
   {

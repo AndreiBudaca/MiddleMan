@@ -1,3 +1,5 @@
+import ClientsTable from "~/components/clients/clientsTable";
+
 export function meta() {
   return [
     { title: "MiddleMan" },
@@ -6,9 +8,6 @@ export function meta() {
 
 export default function Clients() {
   return (
-    <div>
-      <h1>Clients</h1>
-      <p>Welcome to the clients page!</p>
-    </div>
+    <ClientsTable />
   );
 }

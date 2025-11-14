@@ -1,6 +1,6 @@
 ﻿using MiddleMan.Data.InMemory;
-using MiddleMan.Data.Persistance;
-using MiddleMan.Data.Persistance.ConnectionFactory;
+using MiddleMan.Data.Persistency;
+using MiddleMan.Data.Persistency.ConnectionFactory;
 using MiddleMan.Service.Blobs;
 using MiddleMan.Service.WebSocketClientMethods;
 using MiddleMan.Service.WebSocketClients;

@@ -1,8 +1,8 @@
 ﻿using MiddleMan.Core;
 using MiddleMan.Core.Extensions;
-using MiddleMan.Data.Persistance;
-using MiddleMan.Data.Persistance.Classes;
-using MiddleMan.Data.Persistance.Entities;
+using MiddleMan.Data.Persistency;
+using MiddleMan.Data.Persistency.Classes;
+using MiddleMan.Data.Persistency.Entities;
 using MiddleMan.Service.Blobs;
 using MiddleMan.Service.WebSocketClientMethods.Classes;
 using MiddleMan.Service.WebSocketClientMethods.Constants;

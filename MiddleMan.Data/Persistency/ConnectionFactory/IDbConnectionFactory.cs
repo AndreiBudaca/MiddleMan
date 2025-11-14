@@ -1,6 +1,6 @@
 ﻿using System.Data;
 
-namespace MiddleMan.Data.Persistance.ConnectionFactory
+namespace MiddleMan.Data.Persistency.ConnectionFactory
 {
   public interface IDbConnectionFactory
   {

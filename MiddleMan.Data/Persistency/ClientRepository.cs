@@ -1,9 +1,9 @@
 ﻿using Dapper;
-using MiddleMan.Data.Persistance.Classes;
-using MiddleMan.Data.Persistance.ConnectionFactory;
-using MiddleMan.Data.Persistance.Entities;
+using MiddleMan.Data.Persistency.Classes;
+using MiddleMan.Data.Persistency.ConnectionFactory;
+using MiddleMan.Data.Persistency.Entities;
 
-namespace MiddleMan.Data.Persistance
+namespace MiddleMan.Data.Persistency
 {
   public interface IClientRepository : IRepository<Client, (string clientId, string name)> { }
 
@@ -14,23 +14,23 @@ namespace MiddleMan.Data.Persistance
     public async Task<(string clientId, string name)> AddAsync(Client entity)
     {
       using var connection = _connectionFactory.CreateConnection();
-      var query = @"INSERT INTO Clients (UserId, Name, MethodInfoUrl, LastConnectedAt, IsConnected, Signatures)
-                    VALUES (@UserId, @Name, @MethodInfoUrl, @LastConnectedAt, @IsConnected, @Signatures);
-                    SELECT @UserId AS clientId, @Name AS name;";
+      var query = $@"INSERT INTO Clients ({Client.Columns.UserId}, {Client.Columns.Name}, {Client.Columns.MethodInfoUrl}, {Client.Columns.LastConnectedAt}, {Client.Columns.Signatures}, {Client.Columns.TokenHash})
+                    VALUES (@{Client.Columns.UserId}, @{Client.Columns.Name}, @{Client.Columns.MethodInfoUrl}, @{Client.Columns.LastConnectedAt}, @{Client.Columns.Signatures}, @{Client.Columns.TokenHash});
+                    SELECT @{Client.Columns.UserId} AS clientId, @{Client.Columns.Name} AS name;";
       return await connection.QuerySingleAsync<(string clientId, string name)>(query, entity);
     }
 
     public async Task DeleteAsync((string clientId, string name) key)
     {
       using var connection = _connectionFactory.CreateConnection();
-      var query = "DELETE FROM Clients WHERE UserId = @clientId AND Name = @name;";
+      var query = $"DELETE FROM Clients WHERE {Client.Columns.UserId} = @clientId AND {Client.Columns.Name} = @name;";
       await connection.ExecuteAsync(query, new { key.clientId, key.name });
     }
 
     public Task<bool> ExistsAsync((string clientId, string name) key)
     {
       using var connection = _connectionFactory.CreateConnection();
-      var query = "SELECT COUNT(1) FROM Clients WHERE UserId = @clientId AND Name = @name;";
+      var query = $"SELECT COUNT(1) FROM Clients WHERE {Client.Columns.UserId} = @clientId AND {Client.Columns.Name} = @name;";
       return connection.ExecuteScalarAsync<bool>(query, new { key.clientId, key.name });
     }
 
@@ -44,19 +44,20 @@ namespace MiddleMan.Data.Persistance
     public async Task<Client?> GetByIdAsync((string clientId, string name) key)
     {
       using var connection = _connectionFactory.CreateConnection();
-      var query = "SELECT * FROM Clients WHERE UserId = @clientId AND Name = @name;";
+      var query = $"SELECT * FROM Clients WHERE {Client.Columns.UserId} = @clientId AND {Client.Columns.Name} = @name;";
       return await connection.QuerySingleOrDefaultAsync<Client>(query, new { key.clientId, key.name });
     }
 
     public async Task UpdateAsync(Client entity)
     {
       using var connection = _connectionFactory.CreateConnection();
-      var query = @"UPDATE Clients
-                    SET MethodInfoUrl = @MethodInfoUrl,
-                        LastConnectedAt = @LastConnectedAt,
-                        IsConnected = @IsConnected,
-                        Signatures = @Signatures
-                    WHERE UserId = @UserId AND Name = @Name;";
+      var query = $@"UPDATE Clients
+                    SET {Client.Columns.MethodInfoUrl} = @{Client.Columns.MethodInfoUrl},
+                        {Client.Columns.LastConnectedAt} = @{Client.Columns.LastConnectedAt},
+                        {Client.Columns.Signatures} = @{Client.Columns.Signatures},
+                        {Client.Columns.TokenHash} = @{Client.Columns.TokenHash}
+                    WHERE {Client.Columns.UserId} = @clientId AND {Client.Columns.Name} = @Name;";
+
       await connection.ExecuteAsync(query, entity);
     }
 
@@ -65,7 +66,7 @@ namespace MiddleMan.Data.Persistance
       using var connection = _connectionFactory.CreateConnection();
 
       var setClauses = string.Join(", ", updateValues.Select(p => $"{p.ColumnName} = @{p.ColumnName}"));
-      var query = $"UPDATE Clients SET {setClauses} WHERE UserId = @clientId AND Name = @name;";
+      var query = $"UPDATE Clients SET {setClauses} WHERE {Client.Columns.UserId} = @clientId AND {Client.Columns.Name} = @name;";
 
       var parameters = new DynamicParameters();
       parameters.Add("clientId", key.clientId);
@@ -79,7 +80,7 @@ namespace MiddleMan.Data.Persistance
       await connection.ExecuteAsync(query, parameters);
     }
 
-    public async Task<IEnumerable<Client>> GetByContitions(List<ColumnInfo> searchValues)
+    public async Task<IEnumerable<Client>> GetByConditions(List<ColumnInfo> searchValues)
     {
       using var connection = _connectionFactory.CreateConnection();
 

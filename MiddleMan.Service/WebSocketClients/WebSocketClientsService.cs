@@ -1,7 +1,7 @@
 ﻿using MiddleMan.Data.InMemory;
-using MiddleMan.Data.Persistance;
-using MiddleMan.Data.Persistance.Classes;
-using MiddleMan.Data.Persistance.Entities;
+using MiddleMan.Data.Persistency;
+using MiddleMan.Data.Persistency.Classes;
+using MiddleMan.Data.Persistency.Entities;
 using MiddleMan.Service.WebSocketClients.Dto;
 using System.Security.Cryptography;
 using System.Text;
@@ -62,8 +62,8 @@ namespace MiddleMan.Service.WebSocketClients
 
     public async Task<IEnumerable<WebSocketClientDto>> GetWebSocketClients(string identifier)
     {
-      var clientconnections = await memoryContext.GetAllFromHash<WebSocketClientConnectionDataDto>(WebSocketClientKey(identifier));
-      var clientData = await clientRepository.GetByContitions([new ColumnInfo
+      var clientConnections = await memoryContext.GetAllFromHash<WebSocketClientConnectionDataDto>(WebSocketClientKey(identifier));
+      var clientData = await clientRepository.GetByConditions([new ColumnInfo
       {
         ColumnName = Client.Columns.UserId,
         Value = identifier,
@@ -71,7 +71,7 @@ namespace MiddleMan.Service.WebSocketClients
 
       return clientData.Select(clientData =>
       {
-        _ = clientconnections.TryGetValue(clientData.Name, out var clientConnection);
+        _ = clientConnections.TryGetValue(clientData.Name, out var clientConnection);
         return BuildDto(clientData, clientConnection);
       });
     }

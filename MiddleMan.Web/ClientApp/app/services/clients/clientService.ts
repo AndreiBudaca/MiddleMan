@@ -1,6 +1,6 @@
 import { env } from "~/environment";
 import { get, post } from "../requests/requests";
-import type { Client, ClientWithMethods } from "./contracts/client";
+import type { Client, ClientName, ClientWithMethods } from "./contracts/client";
 import type {
   ClientMethodArgument,
   ClientMethod,
@@ -8,6 +8,11 @@ import type {
   ClientMethodArgumentFlags,
 } from "./contracts/clientMethods";
 import { BinaryReader } from "../utils/binaryReader";
+
+export async function addNewClient(client: ClientName): Promise<Client | null> {
+    const result = await post(`${env.API_BASE_URL}/clients`, client);
+    return await result?.json();
+}
 
 export async function getClients(): Promise<Client[]> {
   const result = await get(`${env.API_BASE_URL}/clients`);

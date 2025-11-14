@@ -1,4 +1,4 @@
-﻿namespace MiddleMan.Data.Persistance.Classes
+﻿namespace MiddleMan.Data.Persistency.Classes
 {
   public class ColumnInfo
   {
