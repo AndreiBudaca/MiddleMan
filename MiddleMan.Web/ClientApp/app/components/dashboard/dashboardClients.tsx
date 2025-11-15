@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import type { ClientWithMethods } from "~/services/clients/contracts/client";
+import type { ClientWithMethods } from "~/contracts/client";
 import { getClientsWithMethods } from "~/services/clients/clientService";
 import ClientTreeView from "./clientTreeView";
 import { Box } from "@mui/material";
-import type { ClientMethod } from "~/services/clients/contracts/clientMethods";
+import type { ClientMethod } from "~/contracts/clientMethods";
 import MethodsView from "./methodsView";
 
 export default function DashboardClients() {

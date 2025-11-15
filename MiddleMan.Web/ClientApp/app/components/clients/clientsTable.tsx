@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
-import type { Client } from "~/services/clients/contracts/client";
-import { addNewClient, getClients } from "~/services/clients/clientService";
+import type { Client } from "~/contracts/client";
+import {
+  createClient,
+  deleteClient,
+  getClients,
+} from "~/services/clients/clientService";
 import {
   Box,
   Button,
@@ -34,7 +38,7 @@ export default function ClientsTable() {
     fetchClients();
   }, []);
 
-  const addClient = () => {
+  const addNewClient = () => {
     if (newClients.length === 0) {
       setNewClients([0]);
     } else {
@@ -43,8 +47,8 @@ export default function ClientsTable() {
     }
   };
 
-  const saveNewClient = async (key: number, name: string) => {
-    const newClient = await addNewClient({ name: name });
+  const saveClient = async (key: number, name: string) => {
+    const newClient = await createClient({ name: name });
     if (newClient) {
       setClients([...clients, newClient]);
       discardNewClient(key);
@@ -53,6 +57,13 @@ export default function ClientsTable() {
 
   const discardNewClient = (key: number) => {
     setNewClients(newClients.filter((newClient) => newClient != key));
+  };
+
+  const removeClient = async (name: string) => {
+    const succes = await deleteClient({ name: name });
+    if (succes) {
+      setClients(clients.filter((c) => c.name != name));
+    }
   };
 
   return (
@@ -73,7 +84,7 @@ export default function ClientsTable() {
           alignItems="flex-end"
         >
           <Typography variant="h5">Your clients</Typography>
-          <Button variant="contained" onClick={addClient}>
+          <Button variant="contained" onClick={addNewClient}>
             Add
           </Button>
         </Box>
@@ -82,13 +93,13 @@ export default function ClientsTable() {
             <ClientHeader />
             <TableBody>
               {clients.map((client) => (
-                <ClientRow client={client} />
+                <ClientRow client={client} onDelete={removeClient} />
               ))}
               {newClients.map((key) => (
                 <NewClientRow
                   key={key}
                   clientKey={key}
-                  onSave={saveNewClient}
+                  onSave={saveClient}
                   onRemove={discardNewClient}
                 />
               ))}

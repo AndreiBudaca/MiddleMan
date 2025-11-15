@@ -21,13 +21,6 @@ namespace MiddleMan.Web.Hubs
       var id = Context.User!.Identifier();
       var name = Context.User!.Name();
 
-      var clientData = await webSocketClientsService.GetWebSocketClient(id, name);
-      if (clientData == null || clientData.TokenHash == null)
-      {
-        Context.Abort();
-        return;
-      }
-      
       var clientToken = Context.GetHttpContext()?.Request.Headers.Authorization.FirstOrDefault();
       if (clientToken == null || !clientToken.StartsWith("Bearer "))
       {
@@ -35,8 +28,8 @@ namespace MiddleMan.Web.Hubs
         return;
       }
 
-      var tokenHash = Convert.FromBase64String(clientToken[7..]);
-      if (!tokenHash.SequenceEqual(clientData.TokenHash))
+      var isTokenValid = await webSocketClientsService.IsValidWebSocketClientToken(id, name, clientToken[7..]);
+      if (!isTokenValid)
       {
         Context.Abort();
         return;

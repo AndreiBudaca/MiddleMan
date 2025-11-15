@@ -16,3 +16,8 @@ export interface Client extends ClientName {
 export interface ClientWithMethods extends Client {
   methods: ClientMethod[];
 }
+
+export interface ClientTokenData {
+  token: string | null;
+  tokenHash: string | null;
+}

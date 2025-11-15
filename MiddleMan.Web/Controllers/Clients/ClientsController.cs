@@ -1,11 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Core;
 using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Service.WebSocketClients.Dto;
 using MiddleMan.Web.Controllers.Clients.Model;
-using MiddleMan.Web.Hubs;
 using MiddleMan.Web.Infrastructure.Identity;
 using MiddleMan.Web.Infrastructure.Tokens;
 using MiddleMan.Web.Infrastructure.Tokens.Model;
@@ -16,12 +14,10 @@ namespace MiddleMan.Web.Controllers.Clients
   [Route("api/clients")]
   public class ClientsController(
     IWebSocketClientsService webSocketClientsService,
-    IHubContext<PlaygroundHub> hubContext,
     IConfiguration configuration
     ) : Controller
   {
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
-    private readonly IHubContext<PlaygroundHub> hubContext = hubContext;
     private readonly IConfiguration configuration = configuration;
 
     [HttpGet]
@@ -80,9 +76,13 @@ namespace MiddleMan.Web.Controllers.Clients
         Secret = configuration.GetValue<string>(ConfigurationConstants.Authentication.ClientToken.Secret),
       });
 
-      await webSocketClientsService.UpdateWebSocketClientToken(User.Identifier(), clientName, token);
+      var hash = await webSocketClientsService.UpdateWebSocketClientToken(User.Identifier(), clientName, token);
 
-      return Ok(token);
+      return Ok(new WebSocketTokenDataModel
+      {
+        Token = token,
+        TokenHash = hash != null ? Convert.ToBase64String(hash) : null,
+      });
     }
 
     [HttpDelete("{clientName}/token")]
@@ -96,7 +96,7 @@ namespace MiddleMan.Web.Controllers.Clients
       await webSocketClientsService.UpdateWebSocketClientToken(User.Identifier(), clientName, null);
       await webSocketClientsService.DeleteWebSocketClientConnection(User.Identifier(), clientName);
 
-      return NoContent();
+      return Ok(new WebSocketTokenDataModel());
     }
 
     private static WebSocketClientModel BuildModel(WebSocketClientDto client)

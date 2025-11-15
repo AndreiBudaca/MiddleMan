@@ -1,7 +1,7 @@
 import { env } from "~/environment";
 import { requestObserver } from "./requestEvents";
 
-export async function get(url: string): Promise<Response | null> {
+export async function GET(url: string): Promise<Response | null> {
     const response = await fetch(url, {
         method: 'GET',
     });
@@ -9,13 +9,21 @@ export async function get(url: string): Promise<Response | null> {
     return handleResponse(response);
 }
 
-export async function post(url: string, data: any | null | undefined): Promise<Response | null> {
+export async function POST(url: string, data: any | null | undefined): Promise<Response | null> {
     const response = await fetch(url, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json",
         },
         body: JSON.stringify(data) 
+    });
+
+    return handleResponse(response);
+}
+
+export async function DELETE(url: string) {
+    const response = await fetch(url, {
+        method: 'DELETE',
     });
 
     return handleResponse(response);

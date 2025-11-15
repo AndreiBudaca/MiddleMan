@@ -1,7 +1,7 @@
 import type {
   ClientMethod,
   ClientMethodArgument,
-} from "~/services/clients/contracts/clientMethods";
+} from "~/contracts/clientMethods";
 
 export function mapToJsonTemplate(method: ClientMethod): any {
   return getObject(method.arguments);

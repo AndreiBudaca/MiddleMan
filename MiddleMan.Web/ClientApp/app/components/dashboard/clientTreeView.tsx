@@ -1,7 +1,7 @@
 import { Box, Typography } from "@mui/material";
 import { RichTreeView, type TreeViewBaseItem } from "@mui/x-tree-view";
 import { mapToTreeNodes } from "~/mappers/clientMapper";
-import type { ClientWithMethods } from "~/services/clients/contracts/client";
+import type { ClientWithMethods } from "~/contracts/client";
 
 export interface ClientTreeViewProps {
   clients: ClientWithMethods[];

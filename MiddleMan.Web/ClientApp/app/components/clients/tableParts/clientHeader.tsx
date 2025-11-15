@@ -1,15 +1,23 @@
-import { TableCell, TableHead, TableRow } from "@mui/material";
+import { TableCell, TableHead, TableRow, Typography } from "@mui/material";
 
 export function ClientHeader() {
+  const columns = [
+    "Name",
+    "Status",
+    "Last connection",
+    "Methods hash",
+    "Token hash",
+    "Actions",
+  ];
+
   return (
     <TableHead>
       <TableRow>
-        <TableCell>Name</TableCell>
-        <TableCell align="right">Status</TableCell>
-        <TableCell align="right">Last connection</TableCell>
-        <TableCell align="right">Methods hash</TableCell>
-        <TableCell align="right">Token hash</TableCell>
-        <TableCell align="right">Actions</TableCell>
+        {columns.map((column) => (
+          <TableCell>
+            <Typography variant="body1" fontWeight="bold">{column}</Typography>
+          </TableCell>
+        ))}
       </TableRow>
     </TableHead>
   );

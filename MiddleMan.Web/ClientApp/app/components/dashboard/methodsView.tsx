@@ -1,6 +1,6 @@
 import { Box, Button, Typography } from "@mui/material";
 import { JsonEditor, githubDarkTheme } from "json-edit-react";
-import type { ClientMethod } from "~/services/clients/contracts/clientMethods";
+import type { ClientMethod } from "~/contracts/clientMethods";
 import CodeEditor from "./jsonView/codeEditor";
 import { useEffect, useState } from "react";
 import { mapToJsonTemplate } from "~/mappers/clientMethodArgumentsMapper";

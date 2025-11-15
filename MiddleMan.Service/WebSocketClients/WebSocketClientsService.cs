@@ -21,7 +21,7 @@ namespace MiddleMan.Service.WebSocketClients
           new ColumnInfo
           {
             ColumnName = Client.Columns.LastConnectedAt,
-            Value = DateTime.UtcNow,
+            Value = DateTime.Now,
           }
         ]);
 
@@ -75,8 +75,8 @@ namespace MiddleMan.Service.WebSocketClients
         return BuildDto(clientData, clientConnection);
       });
     }
-
-    public async Task UpdateWebSocketClientToken(string identifier, string name, string? token)
+    
+    public async Task<byte[]?> UpdateWebSocketClientToken(string identifier, string name, string? token)
     {
       var newToken = token != null ?
         SHA256.HashData(Encoding.ASCII.GetBytes(token)) :
@@ -93,6 +93,17 @@ namespace MiddleMan.Service.WebSocketClients
           }
         ]
       );
+
+      return newToken;
+    }
+
+    public async Task<bool> IsValidWebSocketClientToken(string identifier, string name, string token)
+    {
+      var client = await clientRepository.GetByIdAsync((identifier, name));
+      if (client == null || client.TokenHash == null) return false;
+
+      var tokenHash = SHA256.HashData(Encoding.ASCII.GetBytes(token));
+      return tokenHash.SequenceEqual(client.TokenHash);
     }
 
     public async Task DeleteWebSocketClient(string identifier, string name)

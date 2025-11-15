@@ -16,7 +16,9 @@ namespace MiddleMan.Service.WebSocketClients
 
     Task<WebSocketClientDto?> GetWebSocketClient(string identifier, string name);
 
-    Task UpdateWebSocketClientToken(string identifier, string name, string? token);
+    Task<byte[]?> UpdateWebSocketClientToken(string identifier, string name, string? token);
+
+    Task<bool> IsValidWebSocketClientToken(string identifier, string name, string token);
 
     Task DeleteWebSocketClient(string identifier, string name);
 

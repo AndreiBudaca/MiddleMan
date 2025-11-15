@@ -1,5 +1,5 @@
 import type { TreeViewBaseItem } from "@mui/x-tree-view";
-import type { ClientWithMethods } from "~/services/clients/contracts/client";
+import type { ClientWithMethods } from "~/contracts/client";
 
 export interface TreeNode {
   label: string;

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using MiddleMan.Core;
 using MiddleMan.Web.Infrastructure.Attributes;
 using MiddleMan.Web.Infrastructure.Configuration;
+using MiddleMan.Web.Infrastructure.Converters;
 using MiddleMan.Web.Infrastructure.Tokens;
 
 namespace MiddleMan.Web
@@ -32,7 +33,11 @@ namespace MiddleMan.Web
         .AddControllers(options =>
         {
           options.Filters.Add(typeof(ModelValidatorAttribute));
-        });
+        })
+        .AddJsonOptions(options =>
+        {
+          options.JsonSerializerOptions.Converters.Add(new DateTimeConverter());
+        }); ;
 
       builder.Services.AddSignalR(options =>
       {
