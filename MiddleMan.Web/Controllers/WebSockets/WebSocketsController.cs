@@ -1,7 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using MiddleMan.Data.InMemory;
 using MiddleMan.Service.WebSocketClients;
+using MiddleMan.Web.Communication;
+using MiddleMan.Web.Communication.Adapters;
 using MiddleMan.Web.Hubs;
 using MiddleMan.Web.Infrastructure.Identity;
 
@@ -11,38 +14,80 @@ namespace MiddleMan.Web.Controllers.WebSockets
   [Route("api/websockets")]
   public class WebSocketsController(
     IHubContext<PlaygroundHub> hubContext,
-    IWebSocketClientsService webSocketClientsService
+    IWebSocketClientsService webSocketClientsService,
+    IInMemoryContext inMemoryContext,
+    CommunicationManager communicationManager
     ) : Controller
   {
+    private readonly IInMemoryContext inMemoryContext = inMemoryContext;
     private readonly IHubContext<PlaygroundHub> hubContext = hubContext;
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
+    private readonly CommunicationManager communicationManager = communicationManager;
 
     [HttpPost]
-    [Route("{websocketClientName}/{method}")]
-    public async Task<IActionResult> Send([FromRoute] string websocketClientName, [FromRoute] string method, CancellationToken cancellationToken)
+    [RequestSizeLimit(1_000_000_000)]
+    [Route("{webSocketClientName}/{method}")]
+    public async Task<IActionResult> Send([FromRoute] string webSocketClientName, [FromRoute] string method, CancellationToken cancellationToken)
     {
-      if (string.IsNullOrWhiteSpace(websocketClientName)) return base.NotFound();
+      if (string.IsNullOrWhiteSpace(webSocketClientName)) return base.NotFound();
       if (string.IsNullOrWhiteSpace(method)) return NotFound();
 
-      var websocketClient = await webSocketClientsService.GetWebSocketClient(User.Identifier(), websocketClientName);
-      if (websocketClient == null) return NotFound();
+      var webSocketClient = await webSocketClientsService.GetWebSocketClient(User.Identifier(), webSocketClientName);
+      if (webSocketClient == null) return NotFound();
 
-      if (string.IsNullOrWhiteSpace(websocketClient.ConnectionId)) return base.NotFound();
+      if (string.IsNullOrWhiteSpace(webSocketClient.ConnectionId)) return base.NotFound();
 
-      var hubClient = hubContext.Clients.Client(websocketClient.ConnectionId);
+      var hubClient = hubContext.Clients.Client(webSocketClient.ConnectionId);
       if (hubClient == null)
       {
-        await webSocketClientsService.DeleteWebSocketClientConnection(User.Identifier(), websocketClientName);
+        await webSocketClientsService.DeleteWebSocketClientConnection(User.Identifier(), webSocketClientName);
         return NotFound();
       }
 
-      using var reader = new StreamReader(Request.Body);
-      var bytes = new byte[Request.ContentLength ?? 0];
-      await Request.Body.ReadAsync(bytes, cancellationToken);
+      var correlation = Guid.NewGuid();
 
-      var result = await hubClient.InvokeCoreAsync<byte[]>(method, [bytes], cancellationToken);
-     
-      return Ok(Convert.ToBase64String(result));
+      await hubClient.SendAsync(method, correlation, cancellationToken);
+
+      Task? writeTask = null;
+      try
+      {
+        _ = communicationManager.WriteAsync(new StreamToWriterAdapter(Request.Body), correlation);
+        var response = communicationManager.ReadAsync(correlation);
+
+        return new BinaryResult(response, cancellationToken);
+      }
+      finally
+      {
+        if (writeTask != null) await writeTask;
+      }
+    }
+  }
+
+  public class BinaryResult : ActionResult
+  {
+    private readonly IAsyncEnumerable<byte[]>? response = null;
+    private readonly CancellationToken? cancellationToken = null;
+
+    public BinaryResult() { }
+
+    public BinaryResult(IAsyncEnumerable<byte[]> response, CancellationToken cancellationToken)
+    {
+      this.response = response;
+      this.cancellationToken = cancellationToken;
+    }
+
+    public override async Task ExecuteResultAsync(ActionContext context)
+    {
+      context.HttpContext.Response.StatusCode = StatusCodes.Status200OK;
+      context.HttpContext.Response.Headers.ContentType = "application/octet-stream";
+      if (response == null) return;
+
+      await foreach (var chunk in response)
+      {
+        await context.HttpContext.Response.BodyWriter.WriteAsync(chunk, cancellationToken ?? CancellationToken.None);
+      }
+
+      await context.HttpContext.Response.BodyWriter.CompleteAsync();
     }
   }
 }

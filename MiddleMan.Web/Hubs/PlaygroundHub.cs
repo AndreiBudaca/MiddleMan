@@ -1,8 +1,11 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using MiddleMan.Core;
 using MiddleMan.Service.WebSocketClientMethods;
 using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Service.WebSocketClients.Dto;
+using MiddleMan.Web.Communication;
+using MiddleMan.Web.Hubs.Models;
 using MiddleMan.Web.Infrastructure.Identity;
 using System.Threading.Channels;
 
@@ -10,11 +13,13 @@ namespace MiddleMan.Web.Hubs
 {
   [Authorize]
   public class PlaygroundHub(IWebSocketClientsService webSocketClientsService,
-    IWebSocketClientMethodService webSocketClientMethodService
+    IWebSocketClientMethodService webSocketClientMethodService,
+    CommunicationManager communicationManager
     ) : Hub
   {
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
     private readonly IWebSocketClientMethodService webSocketClientMethodService = webSocketClientMethodService;
+    private readonly CommunicationManager communicationManager = communicationManager;
 
     public override async Task OnConnectedAsync()
     {
@@ -48,24 +53,62 @@ namespace MiddleMan.Web.Hubs
       });
     }
 
+    public async Task AddReadChannel(Guid correlation, ChannelReader<byte[]> channelReader)
+    {
+      var id = Context.User!.Identifier();
+      var name = Context.User!.Name();
+      await ConnectionChecks(id, name);
+
+      await communicationManager.RegisterSessionReaderChannelAsync(channelReader, correlation);
+    }
+
+    public async Task<ChannelReader<byte[]>> SubscribeToServer(Guid correlation)
+    {
+      var id = Context.User!.Identifier();
+      var name = Context.User!.Name();
+      await ConnectionChecks(id, name);
+
+      Task? writingCompletedTask = null;
+      try
+      {
+        var channel = Channel.CreateUnbounded<byte[]>();
+        writingCompletedTask = communicationManager.RegisterSessionWriterChannelAsync(channel.Writer, correlation);
+
+        return channel.Reader;
+      }
+      finally
+      {
+        if (writingCompletedTask != null)
+        {
+          await writingCompletedTask;
+        }
+      }
+    }
+
     public async Task Methods(ChannelReader<byte[]> channelReader)
     {
       var id = Context.User!.Identifier();
       var name = Context.User!.Name();
-      
+
       await ConnectionChecks(id, name);
 
       await webSocketClientMethodService.ReceiveMethodsAsync(id, name, channelReader.ReadAllAsync(), CancellationToken.None);
     }
 
-    public async Task<byte[]> Signatures()
+    public async Task<ServerInfoModel> ServerInfo()
     {
       var id = Context.User!.Identifier();
       var name = Context.User!.Name();
 
       await ConnectionChecks(id, name);
 
-      return [0x00, 0x00, 0x00];
+      var client = await webSocketClientsService.GetWebSocketClient(id, name);
+      return new ServerInfoModel
+      {
+        MaxMessageLength = ServerCapabilities.MaxContentLength,
+        MethodSignature = client?.Signature,
+        AcceptedVersions = ServerCapabilities.AllowedVersions
+      };
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

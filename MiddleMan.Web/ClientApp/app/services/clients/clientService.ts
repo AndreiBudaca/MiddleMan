@@ -73,9 +73,12 @@ export async function callClientMethod(
   data: any
 ): Promise<any | null> {
   const formattedData: any = [];
-  Object.keys(data).forEach((key) => {
-    formattedData.push(data[key]);
-  });
+
+  if (data) {
+    Object.keys(data).forEach((key) => {
+      formattedData.push(data[key]);
+    });
+  }
 
   const result = await POST(
     `${env.API_BASE_URL}/websockets/${client}/${method}`,
@@ -83,10 +86,7 @@ export async function callClientMethod(
   );
   if (!result) return null;
 
-  const base64Json = await result.text();
-  const jsonString = atob(base64Json);
-
-  return JSON.parse(jsonString);
+  return await result.json();
 }
 
 export async function getClientsWithMethods(): Promise<ClientWithMethods[]> {
