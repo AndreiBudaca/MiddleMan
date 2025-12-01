@@ -9,11 +9,11 @@ namespace MiddleMan.Web.Communication
   {
     private readonly IInMemoryContext context = context;
 
-    private readonly SessionAsyncMonitorPool sessionReadMonitor = new();
-    private readonly SessionAsyncMonitorPool sessionReadEndedMonitor = new();
+    private readonly AsyncResourceMonitor sessionReadMonitor = new();
+    private readonly AsyncResourceMonitor sessionReadEndedMonitor = new();
 
-    private readonly SessionAsyncMonitorPool sessionWriteMonitor = new();
-    private readonly SessionAsyncMonitorPool sessionWriteEndedMonitor = new();
+    private readonly AsyncResourceMonitor sessionWriteMonitor = new();
+    private readonly AsyncResourceMonitor sessionWriteEndedMonitor = new();
 
     public async Task RegisterSessionReaderChannelAsync(ChannelReader<byte[]> channelReader, Guid correlation)
     {

@@ -13,6 +13,7 @@ export interface ClientMethodArgumentFlags {
   isNullable: boolean;
   isNumeric: boolean;
   isBoolean: boolean;
+  isBinary: boolean;
 }
 
 export interface ClientMethodArgumentComponents {

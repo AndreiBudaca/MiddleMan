@@ -1,5 +1,5 @@
 import { env } from "~/environment";
-import { DELETE, GET, POST } from "../requests/requests";
+import { DELETE, GET, POST, POST_RAW } from "../requests/requests";
 import type {
   Client,
   ClientName,
@@ -70,21 +70,37 @@ export async function deleteClientToken(
 export async function callClientMethod(
   client: string,
   method: string,
+  isBinaryData: boolean,
+  receivesBineryData: boolean,
   data: any
 ): Promise<any | null> {
   const formattedData: any = [];
+  let result: Response | null = null;
+  
+  if (isBinaryData) {
+    result = await POST_RAW(
+      `${env.API_BASE_URL}/websockets/${client}/${method}`,
+      data
+    );  
+  } else {
+    if (data) {
+      Object.keys(data).forEach((key) => {
+        formattedData.push(data[key]);
+      });
+    }
 
-  if (data) {
-    Object.keys(data).forEach((key) => {
-      formattedData.push(data[key]);
-    });
+    result = await POST(
+      `${env.API_BASE_URL}/websockets/${client}/${method}`,
+      formattedData
+    );
   }
-
-  const result = await POST(
-    `${env.API_BASE_URL}/websockets/${client}/${method}`,
-    formattedData
-  );
+  
   if (!result) return null;
+  if (receivesBineryData) {
+    const blob = await result.blob();
+    const url = URL.createObjectURL(blob);
+    return url;
+  }
 
   return await result.json();
 }

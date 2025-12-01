@@ -62,6 +62,7 @@ function getMethodArgument(
     isNullable: (flags & 0x04) != 0,
     isNumeric: (flags & 0x08) != 0,
     isBoolean: (flags & 0x10) != 0,
+    isBinary: (flags & 0x20) != 0,
   };
 
   const typeComponents = isKnownComplexType

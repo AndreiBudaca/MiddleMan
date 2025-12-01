@@ -2,12 +2,12 @@
 
 namespace MiddleMan.Web.Communication.SyncMechanisms
 {
-  public class SessionAsyncMonitorPool
+  public class AsyncResourceMonitor
   {
     private readonly Dictionary<Guid, AsyncMonitor?> monitors = [];
     private readonly object globalLock = new();
 
-    public AsyncMonitor Get(Guid session)
+    private AsyncMonitor Get(Guid session)
     {
       _ = monitors.TryGetValue(session, out var result);
       if (result != null) return result;
@@ -24,7 +24,7 @@ namespace MiddleMan.Web.Communication.SyncMechanisms
       return result;
     }
 
-    public void Discard(Guid session)
+    private void Discard(Guid session)
     {
       lock (globalLock)
       {
@@ -32,33 +32,33 @@ namespace MiddleMan.Web.Communication.SyncMechanisms
       }
     }
     
-    public async Task<T> WaitToGetResource<T>(Func<Task<T>> getterFunct, Func<T, bool> resourceCondition, Guid seesion)
+    public async Task<T> WaitToGetResource<T>(Func<Task<T>> getterFunc, Func<T, bool> resourceCondition, Guid session)
     {
-      var resource = await getterFunct.Invoke();
+      var resource = await getterFunc.Invoke();
       if (!resourceCondition.Invoke(resource))
       {
-        var monitor = Get(seesion);
+        var monitor = Get(session);
         using var leaveMonitorDisposable = await monitor.EnterAsync();
 
-        resource = await getterFunct.Invoke();
+        resource = await getterFunc.Invoke();
         if (!resourceCondition.Invoke(resource))
         {
           await monitor.WaitAsync();
-          resource = await getterFunct.Invoke();
+          resource = await getterFunc.Invoke();
         }
       }
-      Discard(seesion);
+      Discard(session);
 
       return resource;
     }
 
-    public async Task SetResourceAndNotify(Func<Task> setterFunct, Guid seesion)
+    public async Task SetResourceAndNotify(Func<Task> setterFunc, Guid session)
     {
-      var monitor = Get(seesion);
+      var monitor = Get(session);
       using var leaveMonitorDisposable = await monitor.EnterAsync();
-      await setterFunct.Invoke();
+      await setterFunc.Invoke();
       monitor.PulseAll();
-      Discard(seesion);
+      Discard(session);
     }
   }
 }

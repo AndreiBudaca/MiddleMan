@@ -115,6 +115,18 @@ namespace MiddleMan.Service.WebSocketClients
     public async Task DeleteWebSocketClientConnection(string identifier, string name)
     {
       await memoryContext.RemoveFromHash(WebSocketClientKey(identifier), name);
+
+      await clientRepository.UpdateAsync
+      (
+        (identifier, name),
+        [
+          new ColumnInfo
+          {
+            ColumnName = Client.Columns.LastConnectedAt,
+            Value = DateTime.Now,
+          }
+        ]
+      );
     }
 
     private static string WebSocketClientKey(string id) => $"{BASE_KEY}-{id}";
