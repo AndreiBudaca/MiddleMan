@@ -46,17 +46,13 @@ namespace MiddleMan.Web.Controllers.WebSockets
 
       await hubClient.SendAsync(method, correlation, cancellationToken);
 
-      Task? writeTask = null;
       try
       {
-        writeTask = communicationManager.WriteAsync(new StreamToWriterAdapter(Request.Body), correlation);
-        var response = communicationManager.ReadAsync(correlation);
-
-        return new BinaryResult(response, cancellationToken);
+        return new BinaryResult(communicationManager.ReadAsync(correlation), cancellationToken);
       }
       finally
       {
-        if (writeTask != null) await writeTask;
+        await communicationManager.WriteAsync(new StreamToWriterAdapter(Request.Body), correlation);
       }
     }
   }

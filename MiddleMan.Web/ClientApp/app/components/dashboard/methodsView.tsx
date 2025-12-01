@@ -32,8 +32,6 @@ export default function MethodsView({
     method?.arguments.length == 1 && method?.arguments[0].isBinary;
   const isBinaryResult = method?.returns?.isBinary ?? false;
 
-  console.log(methodParams);
-
   const darkTheme = createTheme({
     palette: {
       mode: "dark",
@@ -52,6 +50,9 @@ export default function MethodsView({
 
   const invokeMethod = async (_: any) => {
     if (!method || !client) return;
+
+    setResult(null);
+
     const result = await callClientMethod(
       client,
       method?.name,
@@ -59,6 +60,7 @@ export default function MethodsView({
       isBinaryResult,
       methodParams
     );
+    
     setResult(result);
   };
 

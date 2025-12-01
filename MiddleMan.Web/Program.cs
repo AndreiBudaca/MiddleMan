@@ -42,7 +42,7 @@ namespace MiddleMan.Web
       builder.Services.AddSignalR(options =>
       {
         options.StreamBufferCapacity = 1;
-        options.MaximumReceiveMessageSize = ServerCapabilities.MaxContentLength;
+        options.MaximumReceiveMessageSize = ServerCapabilities.MaxContentLength * 2;
         options.MaximumParallelInvocationsPerClient = 10;
         options.EnableDetailedErrors = true;
       }).AddMessagePackProtocol();

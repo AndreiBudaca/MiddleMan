@@ -68,21 +68,10 @@ namespace MiddleMan.Web.Hubs
       var name = Context.User!.Name();
       await ConnectionChecks(id, name);
 
-      Task? writingCompletedTask = null;
-      try
-      {
-        var channel = Channel.CreateUnbounded<byte[]>();
-        writingCompletedTask = communicationManager.RegisterSessionWriterChannelAsync(channel.Writer, correlation);
+      var channel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(1));
+      await communicationManager.RegisterSessionWriterChannelAsync(channel.Writer, correlation);
 
-        return channel.Reader;
-      }
-      finally
-      {
-        if (writingCompletedTask != null)
-        {
-          await writingCompletedTask;
-        }
-      }
+      return channel.Reader;
     }
 
     public async Task Methods(ChannelReader<byte[]> channelReader)

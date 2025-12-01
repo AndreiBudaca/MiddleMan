@@ -10,16 +10,10 @@ namespace MiddleMan.Web.Communication.Adapters
     public async IAsyncEnumerable<byte[]> Adapt()
     {
       var buffer = new byte[ServerCapabilities.MaxContentLength];
-      var bytesRead = int.MaxValue;
+      var bytesRead = await source.ReadAsync(buffer.AsMemory(0, ServerCapabilities.MaxContentLength));
 
       while (bytesRead > 0)
       {
-        bytesRead = await source.ReadAsync(buffer);
-        if (bytesRead == 0)
-        {
-          yield break;
-        }
-
         if (bytesRead == buffer.Length)
         {
           yield return buffer;
@@ -28,7 +22,9 @@ namespace MiddleMan.Web.Communication.Adapters
         {
           yield return buffer.Take(bytesRead).ToArray();
         }
-      }      
+
+        bytesRead = await source.ReadAsync(buffer.AsMemory(0, ServerCapabilities.MaxContentLength));
+      }
     }
   }
 }

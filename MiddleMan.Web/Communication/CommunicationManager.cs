@@ -13,7 +13,6 @@ namespace MiddleMan.Web.Communication
     private readonly AsyncResourceMonitor sessionReadEndedMonitor = new();
 
     private readonly AsyncResourceMonitor sessionWriteMonitor = new();
-    private readonly AsyncResourceMonitor sessionWriteEndedMonitor = new();
 
     public async Task RegisterSessionReaderChannelAsync(ChannelReader<byte[]> channelReader, Guid correlation)
     {
@@ -38,13 +37,6 @@ namespace MiddleMan.Web.Communication
         async () => await context.AddToHash("writers", correlation.ToString(), channelWriter),
         correlation
       );
-
-      _ = await sessionWriteEndedMonitor.WaitToGetResource
-      (
-        async () => await context.GetFromHash<ChannelWriter<byte[]>>("writers", correlation.ToString()),
-        (writer) => writer == null,
-        correlation
-      );
     }
 
     public Task WriteAsync(IDataWriterAdapter adapter, Guid correlation)
@@ -65,16 +57,15 @@ namespace MiddleMan.Web.Communication
       {
         await foreach (var chunk in dataSource)
         {
-          await writer.WriteAsync(chunk);
+          var buff = new byte[chunk.Length];
+          Buffer.BlockCopy(chunk, 0, buff, 0, chunk.Length);
+
+          await writer.WriteAsync(buff);
         }
         writer.Complete();
       }
 
-      await sessionWriteEndedMonitor.SetResourceAndNotify
-      (
-        async () => await context.RemoveFromHash("writers", correlation.ToString()),
-        correlation
-      );
+      await context.RemoveFromHash("writers", correlation.ToString());
     }
 
     public async IAsyncEnumerable<byte[]> ReadAsync(Guid correlation)
