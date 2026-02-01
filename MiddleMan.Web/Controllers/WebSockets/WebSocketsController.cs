@@ -7,12 +7,14 @@ using MiddleMan.Web.Communication.Adapters;
 using MiddleMan.Web.Communication.Metadata;
 using MiddleMan.Web.Controllers.ActionResults;
 using MiddleMan.Web.Hubs;
+using MiddleMan.Web.Infrastructure.Attributes;
 using MiddleMan.Web.Infrastructure.Identity;
 
 namespace MiddleMan.Web.Controllers.WebSockets
 {
   [Authorize]
   [Route("api/websockets")]
+  [DisableFormValueModelBinding]
   public class WebSocketsController(
     IHubContext<PlaygroundHub> hubContext,
     IWebSocketClientsService webSocketClientsService,
