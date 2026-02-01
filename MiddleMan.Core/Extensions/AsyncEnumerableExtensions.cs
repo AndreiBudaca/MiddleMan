@@ -15,7 +15,7 @@ namespace MiddleMan.Core.Extensions
     {
       var received = new T[bytesToReceive];
       var totalBytesReceived = 0;
-      var bytesCoppied = 0;
+      var bytesCopied = 0;
 
       await foreach (var item in data.WithCancellation(cancellationToken))
       {
@@ -33,14 +33,14 @@ namespace MiddleMan.Core.Extensions
         var copyFromIndex = totalBytesReceived > offset ? 0 : offset - totalBytesReceived;
         var bytesToCopy = Math.Min(item.Length - copyFromIndex, bytesToReceive - totalBytesReceived + offset);
 
-        Array.Copy(item, copyFromIndex, received, bytesCoppied, bytesToCopy);
+        Array.Copy(item, copyFromIndex, received, bytesCopied, bytesToCopy);
 
         // Update counters
-        bytesCoppied += bytesToCopy;
+        bytesCopied += bytesToCopy;
         totalBytesReceived += item.Length;
 
         // Check if we've received enough bytes
-        if (bytesCoppied >= bytesToReceive)
+        if (bytesCopied >= bytesToReceive)
         {
           return new AsyncEnumResult<T>
           {

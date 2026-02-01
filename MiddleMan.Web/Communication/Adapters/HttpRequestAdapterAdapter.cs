@@ -1,14 +1,17 @@
-﻿
-using MiddleMan.Core;
+﻿using MiddleMan.Core;
+using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Communication.Adapters
 {
-  public class StreamToWriterAdapter(Stream source) : IDataWriterAdapter
+  public class HttpRequestAdapterAdapter(HttpRequest request) : IDataWriterAdapter
   {
-    private readonly Stream source = source;
+    private readonly HttpRequestMetadata metadata = new (request);
+    private readonly Stream source = request.Body;
 
     public async IAsyncEnumerable<byte[]> Adapt()
     {
+      yield return metadata.SerializeJson();
+
       var buffer = new byte[ServerCapabilities.MaxContentLength];
       var bytesRead = await source.ReadAsync(buffer.AsMemory(0, ServerCapabilities.MaxContentLength));
 

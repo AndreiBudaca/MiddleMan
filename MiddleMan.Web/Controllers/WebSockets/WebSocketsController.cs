@@ -48,11 +48,11 @@ namespace MiddleMan.Web.Controllers.WebSockets
 
       try
       {
-        return new BinaryResult(communicationManager.ReadAsync(correlation), cancellationToken);
+        return new MiddleManClientResult(communicationManager.ReadAsync(correlation), cancellationToken);
       }
       finally
       {
-        await communicationManager.WriteAsync(new StreamToWriterAdapter(Request.Body), correlation);
+        await communicationManager.WriteAsync(new HttpRequestAdapterAdapter(HttpContext.Request), correlation);
       }
     }
   }
