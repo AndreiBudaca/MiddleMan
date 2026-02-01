@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Web.Communication;
 using MiddleMan.Web.Communication.Adapters;
+using MiddleMan.Web.Communication.Metadata;
 using MiddleMan.Web.Controllers.ActionResults;
 using MiddleMan.Web.Hubs;
 using MiddleMan.Web.Infrastructure.Identity;
@@ -52,7 +53,10 @@ namespace MiddleMan.Web.Controllers.WebSockets
       }
       finally
       {
-        await communicationManager.WriteAsync(new HttpRequestAdapterAdapter(HttpContext.Request), correlation);
+        await communicationManager.WriteAsync(new HttpRequestAdapterAdapter(HttpContext.Request, new HttpUser
+        {
+          Identifier = User.Identifier(),
+        }), correlation);
       }
     }
   }

@@ -3,9 +3,9 @@ using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Communication.Adapters
 {
-  public class HttpRequestAdapterAdapter(HttpRequest request) : IDataWriterAdapter
+  public class HttpRequestAdapterAdapter(HttpRequest request, HttpUser? user = null) : IDataWriterAdapter
   {
-    private readonly HttpRequestMetadata metadata = new (request);
+    private readonly HttpRequestMetadata metadata = new (request, user);
     private readonly Stream source = request.Body;
 
     public async IAsyncEnumerable<byte[]> Adapt()
