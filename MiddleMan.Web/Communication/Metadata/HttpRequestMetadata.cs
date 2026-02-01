@@ -12,15 +12,18 @@
 
     public HttpRequestMetadata()
     {
-      
+
     }
 
     public HttpRequestMetadata(HttpRequest request, HttpUser? user = null)
     {
-      List<string> headersToOmit = ["Cookie"]; 
+      List<string> headersToOmit = ["Cookie"];
 
       Method = request.Method;
-      Path = request.Path + request.QueryString;
+
+      var pathParts = request.Path.Value?.Split('/') ?? [];
+
+      Path = "/" + string.Join('/', pathParts.Skip(5)) + request.QueryString;
       foreach (var header in request.Headers.Where(x => !headersToOmit.Contains(x.Key)))
       {
         Headers.Add(new HttpHeader

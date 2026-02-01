@@ -23,9 +23,8 @@ namespace MiddleMan.Web.Controllers.WebSockets
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
     private readonly CommunicationManager communicationManager = communicationManager;
 
-    [HttpPost]
     [RequestSizeLimit(1_000_000_000)]
-    [Route("{webSocketClientName}/{method}")]
+    [Route("{webSocketClientName}/{method}/{*rest}")]
     public async Task<IActionResult> Send([FromRoute] string webSocketClientName, [FromRoute] string method, CancellationToken cancellationToken)
     {
       if (string.IsNullOrWhiteSpace(webSocketClientName)) return base.NotFound();
@@ -47,17 +46,12 @@ namespace MiddleMan.Web.Controllers.WebSockets
 
       await hubClient.SendAsync(method, correlation, cancellationToken);
 
-      try
+      await communicationManager.WriteAsync(new HttpRequestAdapterAdapter(HttpContext.Request, new HttpUser
       {
-        return new MiddleManClientResult(communicationManager.ReadAsync(correlation), cancellationToken);
-      }
-      finally
-      {
-        await communicationManager.WriteAsync(new HttpRequestAdapterAdapter(HttpContext.Request, new HttpUser
-        {
-          Identifier = User.Identifier(),
-        }), correlation);
-      }
+        Identifier = User.Identifier(),
+      }), correlation);
+
+      return new MiddleManClientResult(communicationManager.ReadAsync(correlation), cancellationToken);
     }
   }
 }

@@ -76,6 +76,8 @@ namespace MiddleMan.Web
         app.UseExceptionHandler("/Error");
       }
 
+      app.UseRedirectOnClientReferer();
+
       app.UseProxy();
 
       app.MapStaticFiles(ServerCapabilities.UIStaticFilesPath, ServerCapabilities.StaticFilesPath);
