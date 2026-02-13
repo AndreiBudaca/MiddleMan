@@ -1,17 +1,15 @@
-﻿using Microsoft.Extensions.Configuration;
-using MiddleMan.Core;
-using StackExchange.Redis;
+﻿using StackExchange.Redis;
 using System.Text.Json;
 
 namespace MiddleMan.Data.InMemory
 {
-  public class RedisContext : IInMemoryContext
+  public class RedisContext : ISharedInMemoryContext
   {
     private readonly IDatabase database;
 
-    public RedisContext(IConfiguration configuration)
+    public RedisContext(string connectionString)
     {
-      ConnectionMultiplexer redis = ConnectionMultiplexer.Connect(configuration.GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis)!);
+      ConnectionMultiplexer redis = ConnectionMultiplexer.Connect(connectionString);
       database = redis.GetDatabase();
     }
 

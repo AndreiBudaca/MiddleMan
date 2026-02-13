@@ -1,9 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Core;
+using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClientMethods;
 using MiddleMan.Service.WebSocketClients;
-using MiddleMan.Service.WebSocketClients.Dto;
 using MiddleMan.Web.Communication;
 using MiddleMan.Web.Hubs.Models;
 using MiddleMan.Web.Infrastructure.Identity;
@@ -14,66 +14,47 @@ namespace MiddleMan.Web.Hubs
   [Authorize]
   public class PlaygroundHub(IWebSocketClientsService webSocketClientsService,
     IWebSocketClientMethodService webSocketClientMethodService,
-    CommunicationManager communicationManager
-    ) : Hub
+    CommunicationManager communicationManager,
+    IWebSocketClientConnectionsService webSocketClientConnectionsService) : Hub
   {
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
+    private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
     private readonly IWebSocketClientMethodService webSocketClientMethodService = webSocketClientMethodService;
     private readonly CommunicationManager communicationManager = communicationManager;
 
+    #region [Clinet connection hooks]
     public override async Task OnConnectedAsync()
     {
       var id = Context.User!.Identifier();
       var name = Context.User!.Name();
-
       var clientToken = Context.GetHttpContext()?.Request.Headers.Authorization.FirstOrDefault();
-      if (clientToken == null || !clientToken.StartsWith("Bearer "))
+
+      var isAuthorized = await AuthorizeClient(id, name, clientToken);
+      if (!isAuthorized)
       {
         Context.Abort();
         return;
       }
 
-      var isTokenValid = await webSocketClientsService.IsValidWebSocketClientToken(id, name, clientToken[7..]);
-      if (!isTokenValid)
-      {
-        Context.Abort();
-        return;
-      }
-
-      var existingClientConnection = await webSocketClientsService.GetWebSocketClientConnection(id, name);
-
-      if (existingClientConnection is not null)
-      {
-        throw new HubException($"A second client with the same name tried to connect. ID = {id}, Name = {name}");
-      }
-
-      await webSocketClientsService.AddWebSocketClientConnection(id, name, new WebSocketClientConnectionDataDto
-      {
-        ConnectionId = Context.ConnectionId,
-      });
+      await webSocketClientConnectionsService.AddWebSocketClientConnection(id, name, Context.ConnectionId);
     }
 
-    public async Task AddReadChannel(Guid correlation, ChannelReader<byte[]> channelReader)
+    public override async Task OnDisconnectedAsync(Exception? exception)
     {
       var id = Context.User!.Identifier();
       var name = Context.User!.Name();
-      await ConnectionChecks(id, name);
 
-      await communicationManager.RegisterSessionReaderChannelAsync(channelReader, correlation);
+      await webSocketClientConnectionsService.DeleteWebSocketClientConnection(id, name, Context.ConnectionId);
     }
 
-    public async Task<ChannelReader<byte[]>> SubscribeToServer(Guid correlation)
+    private async Task<bool> AuthorizeClient(string id, string name, string? clientToken)
     {
-      var id = Context.User!.Identifier();
-      var name = Context.User!.Name();
-      await ConnectionChecks(id, name);
-
-      var channel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(1));
-      await communicationManager.RegisterSessionWriterChannelAsync(channel.Writer, correlation);
-
-      return channel.Reader;
+      if (clientToken == null || !clientToken.StartsWith("Bearer ")) return false;
+      return await webSocketClientsService.IsValidWebSocketClientToken(id, name, clientToken[7..]);
     }
+    #endregion
 
+    #region [Server info methods]
     public async Task Methods(ChannelReader<byte[]> channelReader)
     {
       var id = Context.User!.Identifier();
@@ -99,20 +80,37 @@ namespace MiddleMan.Web.Hubs
         AcceptedVersions = ServerCapabilities.AllowedVersions
       };
     }
+    #endregion
 
-    public override async Task OnDisconnectedAsync(Exception? exception)
+    #region [Communication methods]
+    public async Task AddReadChannel(Guid correlation, ChannelReader<byte[]> channelReader)
     {
       var id = Context.User!.Identifier();
       var name = Context.User!.Name();
+      await ConnectionChecks(id, name);
 
-      await webSocketClientsService.DeleteWebSocketClientConnection(id, name);
+      await communicationManager.RegisterSessionReaderChannelAsync(channelReader, correlation);
     }
 
+    public async Task<ChannelReader<byte[]>> SubscribeToServer(Guid correlation)
+    {
+      var id = Context.User!.Identifier();
+      var name = Context.User!.Name();
+      await ConnectionChecks(id, name);
+
+      var channel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(1));
+      await communicationManager.RegisterSessionWriterChannelAsync(channel.Writer, correlation);
+
+      return channel.Reader;
+    }
+    #endregion
+
+    // TO DO: Refactor this to a hub filter
     private async Task ConnectionChecks(string id, string name)
     {
-      var clientConnection = await webSocketClientsService.GetWebSocketClientConnection(id, name);
+      var clientConectionExists = await webSocketClientConnectionsService.ExistsWebSocketClientConnection(id, name);
 
-      if (string.IsNullOrEmpty(clientConnection?.ConnectionId))
+      if (!clientConectionExists)
       {
         Context.Abort();
       }

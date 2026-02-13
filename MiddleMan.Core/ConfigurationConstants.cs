@@ -19,6 +19,7 @@
     public static class ConnectionStrings
     {
       public const string Redis = "Redis";
+      public const string Sqlite = "Sqlite";
     }
   }
 }

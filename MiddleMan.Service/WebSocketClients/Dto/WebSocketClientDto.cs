@@ -1,12 +1,12 @@
 ﻿namespace MiddleMan.Service.WebSocketClients.Dto
 {
-  public class WebSocketClientDto : WebSocketClientConnectionDataDto
+  public class WebSocketClientDto
   {
     public string? Name { get; set; }
 
-    public string? MethodsUrl { get; set; }
+    public bool IsConnected { get; set; }
 
-    public DateTime? LastConnectedAt { get; set; }
+    public string? MethodsUrl { get; set; }
 
     public byte[]? Signature { get; set; }
 

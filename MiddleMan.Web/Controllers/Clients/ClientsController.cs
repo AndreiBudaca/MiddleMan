@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MiddleMan.Core;
+using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Service.WebSocketClients.Dto;
 using MiddleMan.Web.Controllers.Clients.Model;
@@ -15,9 +16,11 @@ namespace MiddleMan.Web.Controllers.Clients
   public class ClientsController(
     IWebSocketClientsService webSocketClientsService,
     IConfiguration configuration
-    ) : Controller
+,
+    IWebSocketClientConnectionsService webSocketClientConnectionsService) : Controller
   {
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
+    private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
     private readonly IConfiguration configuration = configuration;
 
     [HttpGet]
@@ -67,7 +70,7 @@ namespace MiddleMan.Web.Controllers.Clients
         return NotFound();
       }
 
-      await webSocketClientsService.DeleteWebSocketClientConnection(User.Identifier(), clientName);
+      await webSocketClientConnectionsService.DeleteWebSocketClientConnection(User.Identifier(), clientName);
 
       var token = TokenManager.Generate(new TokenData
       {
@@ -94,7 +97,7 @@ namespace MiddleMan.Web.Controllers.Clients
       }
 
       await webSocketClientsService.UpdateWebSocketClientToken(User.Identifier(), clientName, null);
-      await webSocketClientsService.DeleteWebSocketClientConnection(User.Identifier(), clientName);
+      await webSocketClientConnectionsService.DeleteWebSocketClientConnection(User.Identifier(), clientName);
 
       return Ok(new WebSocketTokenDataModel());
     }
@@ -105,8 +108,7 @@ namespace MiddleMan.Web.Controllers.Clients
       {
         Name = client.Name,
         MethodsUrl = client.MethodsUrl,
-        IsConnected = !string.IsNullOrEmpty(client.ConnectionId),
-        LastConnectedAt = client.LastConnectedAt,
+        IsConnected = client.IsConnected,
         Signature = client.Signature != null ? Convert.ToBase64String(client.Signature) : null,
         TokenHash = client.TokenHash != null ? Convert.ToBase64String(client.TokenHash) : null,
       };

@@ -1,32 +1,17 @@
-﻿using MiddleMan.Data.InMemory;
-using MiddleMan.Data.Persistency;
+﻿using MiddleMan.Data.Persistency;
 using MiddleMan.Data.Persistency.Classes;
 using MiddleMan.Data.Persistency.Entities;
+using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClients.Dto;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace MiddleMan.Service.WebSocketClients
 {
-  public class WebSocketClientsService(IInMemoryContext memoryContext, IClientRepository clientRepository) : IWebSocketClientsService
+  public class WebSocketClientsService(IClientRepository clientRepository, IWebSocketClientConnectionsService webSocketClientConnectionsService) : IWebSocketClientsService
   {
-    private const string BASE_KEY = "WebSocketClients";
-    private readonly IInMemoryContext memoryContext = memoryContext;
+    private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
     private readonly IClientRepository clientRepository = clientRepository;
-
-    public async Task AddWebSocketClientConnection(string identifier, string name, WebSocketClientConnectionDataDto clientData)
-    {
-      await clientRepository.UpdateAsync((identifier, name),
-        [
-          new ColumnInfo
-          {
-            ColumnName = Client.Columns.LastConnectedAt,
-            Value = DateTime.Now,
-          }
-        ]);
-
-      await memoryContext.AddToHash(WebSocketClientKey(identifier), name, clientData);
-    }
 
     public async Task<WebSocketClientDto> AddWebSocketClient(NewWebSockerClientDto newClient)
     {
@@ -38,7 +23,7 @@ namespace MiddleMan.Service.WebSocketClients
 
       await clientRepository.AddAsync(client);
 
-      return BuildDto(client, null);
+      return BuildDto(client);
     }
 
     public Task<bool> ExistsWebSocketClients(string identifier, string name)
@@ -46,36 +31,31 @@ namespace MiddleMan.Service.WebSocketClients
       return clientRepository.ExistsAsync((identifier, name));
     }
 
-    public Task<WebSocketClientConnectionDataDto?> GetWebSocketClientConnection(string identifier, string name)
-    {
-      return memoryContext.GetFromHash<WebSocketClientConnectionDataDto>(WebSocketClientKey(identifier), name);
-    }
-
     public async Task<WebSocketClientDto?> GetWebSocketClient(string identifier, string name)
     {
-      var clientConnection = await memoryContext.GetFromHash<WebSocketClientConnectionDataDto>(WebSocketClientKey(identifier), name);
       var clientData = await clientRepository.GetByIdAsync((identifier, name));
 
       if (clientData == null) return null;
-      return BuildDto(clientData, clientConnection);
+
+      var isConnected = await webSocketClientConnectionsService.ExistsWebSocketClientConnection(identifier, name);
+      return BuildDto(clientData, isConnected);
     }
 
     public async Task<IEnumerable<WebSocketClientDto>> GetWebSocketClients(string identifier)
     {
-      var clientConnections = await memoryContext.GetAllFromHash<WebSocketClientConnectionDataDto>(WebSocketClientKey(identifier));
-      var clientData = await clientRepository.GetByConditions([new ColumnInfo
-      {
-        ColumnName = Client.Columns.UserId,
-        Value = identifier,
-      }]);
+      var clientData = await clientRepository.GetByConditions(
+      [
+        new ColumnInfo
+        {
+          ColumnName = Client.Columns.UserId,
+          Value = identifier,
+        }
+      ]);
 
-      return clientData.Select(clientData =>
-      {
-        _ = clientConnections.TryGetValue(clientData.Name, out var clientConnection);
-        return BuildDto(clientData, clientConnection);
-      });
+      var connectedClients = await webSocketClientConnectionsService.GetConnectedWebSocketClientConnections(identifier);
+      return clientData.Select(x => BuildDto(x, connectedClients.Any(c => c == x.Name)));
     }
-    
+
     public async Task<byte[]?> UpdateWebSocketClientToken(string identifier, string name, string? token)
     {
       var newToken = token != null ?
@@ -97,6 +77,12 @@ namespace MiddleMan.Service.WebSocketClients
       return newToken;
     }
 
+    public async Task DeleteWebSocketClient(string identifier, string name)
+    {
+      await clientRepository.DeleteAsync((identifier, name));
+      await webSocketClientConnectionsService.DeleteWebSocketClientConnection(identifier, name);
+    }
+
     public async Task<bool> IsValidWebSocketClientToken(string identifier, string name, string token)
     {
       var client = await clientRepository.GetByIdAsync((identifier, name));
@@ -106,39 +92,13 @@ namespace MiddleMan.Service.WebSocketClients
       return tokenHash.SequenceEqual(client.TokenHash);
     }
 
-    public async Task DeleteWebSocketClient(string identifier, string name)
-    {
-      await clientRepository.DeleteAsync((identifier, name));
-      await DeleteWebSocketClientConnection(identifier, name);
-    }
-    
-    public async Task DeleteWebSocketClientConnection(string identifier, string name)
-    {
-      await memoryContext.RemoveFromHash(WebSocketClientKey(identifier), name);
-
-      await clientRepository.UpdateAsync
-      (
-        (identifier, name),
-        [
-          new ColumnInfo
-          {
-            ColumnName = Client.Columns.LastConnectedAt,
-            Value = DateTime.Now,
-          }
-        ]
-      );
-    }
-
-    private static string WebSocketClientKey(string id) => $"{BASE_KEY}-{id}";
-
-    private static WebSocketClientDto BuildDto(Client client, WebSocketClientConnectionDataDto? connectionInfo)
+    private static WebSocketClientDto BuildDto(Client client, bool isConnected = false)
     {
       return new WebSocketClientDto
       {
         Name = client.Name,
-        ConnectionId = connectionInfo?.ConnectionId,
+        IsConnected = isConnected,
         MethodsUrl = client.MethodInfoUrl,
-        LastConnectedAt = client.LastConnectedAt,
         Signature = client.Signatures,
         TokenHash = client.TokenHash,
       };

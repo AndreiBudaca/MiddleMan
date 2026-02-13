@@ -8,8 +8,6 @@
 
     public bool IsConnected { get; set; }
 
-    public DateTime? LastConnectedAt { get; set; }
-
     public string? Signature { get; set; }
 
     public string? TokenHash { get; set; }
