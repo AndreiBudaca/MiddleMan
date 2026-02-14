@@ -8,8 +8,6 @@
 
     public string? MethodInfoUrl { get; set; }
 
-    public DateTime? LastConnectedAt { get; set; }
-
     public byte[]? Signatures { get; set; }
 
     public byte[]? TokenHash { get; set; }
@@ -19,7 +17,6 @@
       public const string UserId = "UserId";
       public const string Name = "Name";
       public const string MethodInfoUrl = "MethodInfoUrl";
-      public const string LastConnectedAt = "LastConnectedAt";
       public const string Signatures = "Signatures";
       public const string TokenHash = "TokenHash";
     }

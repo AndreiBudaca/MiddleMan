@@ -57,9 +57,6 @@ export function ClientRow({ client, onDelete }: ClientRowProps) {
     >
       <InfoCell info={client.name} />
       <InfoCell info={client.isConnected ? "online" : "offline"} />
-      <InfoCell
-        info={client.lastConnectedAt?.toLocaleString() ?? "never"}
-      />
       <TableCell>
         <TrimmedText
           text={client.signature ?? "not registered"}

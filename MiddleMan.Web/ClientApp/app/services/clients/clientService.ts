@@ -25,7 +25,6 @@ export async function getClients(): Promise<Client[]> {
         name: d.name,
         methodsUrl: d.methodsUrl,
         isConnected: d.isConnected,
-        lastConnectedAt: d.lastConnectedAt ? new Date(d.lastConnectedAt) : null,
         signature: d.signature,
         tokenHash: d.tokenHash,
       };

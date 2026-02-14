@@ -4,7 +4,6 @@ export function ClientHeader() {
   const columns = [
     "Name",
     "Status",
-    "Last connection",
     "Methods hash",
     "Token hash",
     "Actions",

@@ -30,7 +30,6 @@ namespace MiddleMan.Data.Persistency.ConnectionFactory
             UserId TEXT NOT NULL,
             Name TEXT NOT NULL,
             MethodInfoUrl TEXT,
-            LastConnectedAt TEXT NULL,
             Signatures BLOB,
             TokenHash BLOB,
             PRIMARY KEY (UserId, Name)

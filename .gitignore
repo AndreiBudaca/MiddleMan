@@ -400,3 +400,5 @@ FodyWeavers.xsd
 .env
 *.ps1
 *.db
+
+dev_tools/

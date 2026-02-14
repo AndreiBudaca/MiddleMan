@@ -14,8 +14,8 @@ namespace MiddleMan.Data.Persistency
     public async Task<(string clientId, string name)> AddAsync(Client entity)
     {
       using var connection = _connectionFactory.CreateConnection();
-      var query = $@"INSERT INTO Clients ({Client.Columns.UserId}, {Client.Columns.Name}, {Client.Columns.MethodInfoUrl}, {Client.Columns.LastConnectedAt}, {Client.Columns.Signatures}, {Client.Columns.TokenHash})
-                    VALUES (@{Client.Columns.UserId}, @{Client.Columns.Name}, @{Client.Columns.MethodInfoUrl}, @{Client.Columns.LastConnectedAt}, @{Client.Columns.Signatures}, @{Client.Columns.TokenHash});
+      var query = $@"INSERT INTO Clients ({Client.Columns.UserId}, {Client.Columns.Name}, {Client.Columns.MethodInfoUrl}, {Client.Columns.Signatures}, {Client.Columns.TokenHash})
+                    VALUES (@{Client.Columns.UserId}, @{Client.Columns.Name}, @{Client.Columns.MethodInfoUrl}, @{Client.Columns.Signatures}, @{Client.Columns.TokenHash});
                     SELECT @{Client.Columns.UserId} AS clientId, @{Client.Columns.Name} AS name;";
       return await connection.QuerySingleAsync<(string clientId, string name)>(query, entity);
     }
@@ -53,7 +53,6 @@ namespace MiddleMan.Data.Persistency
       using var connection = _connectionFactory.CreateConnection();
       var query = $@"UPDATE Clients
                     SET {Client.Columns.MethodInfoUrl} = @{Client.Columns.MethodInfoUrl},
-                        {Client.Columns.LastConnectedAt} = @{Client.Columns.LastConnectedAt},
                         {Client.Columns.Signatures} = @{Client.Columns.Signatures},
                         {Client.Columns.TokenHash} = @{Client.Columns.TokenHash}
                     WHERE {Client.Columns.UserId} = @clientId AND {Client.Columns.Name} = @Name;";
