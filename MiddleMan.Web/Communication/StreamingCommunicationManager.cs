@@ -5,7 +5,7 @@ using System.Threading.Channels;
 
 namespace MiddleMan.Web.Communication
 {
-  public class CommunicationManager(IInMemoryContext context)
+  public class StreamingCommunicationManager(IInMemoryContext context)
   {
     private readonly IInMemoryContext context = context;
 

@@ -29,7 +29,7 @@ namespace MiddleMan.Web.Infrastructure.Configuration
       services.AddScoped<IWebSocketClientConnectionsService, WebSocketClientConnectionsService>();
 
       // Add communication hub
-      services.AddSingleton<CommunicationManager>();
+      services.AddSingleton<StreamingCommunicationManager>();
     }
 
     public static void InitializeDb(this WebApplication app)

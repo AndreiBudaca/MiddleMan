@@ -8,7 +8,7 @@
 
     public HttpUser? User { get; set; }
 
-    public List<HttpHeader> Headers { get; set; } = [];
+    public Dictionary<string, string?> Headers { get; set; } = [];
 
     public HttpRequestMetadata()
     {
@@ -26,11 +26,7 @@
       Path = "/" + string.Join('/', pathParts.Skip(5)) + request.QueryString;
       foreach (var header in request.Headers.Where(x => !headersToOmit.Contains(x.Key)))
       {
-        Headers.Add(new HttpHeader
-        {
-          Name = header.Key,
-          Value = header.Value,
-        });
+        Headers.Add(header.Key, header.Value);
       }
 
       User = user;

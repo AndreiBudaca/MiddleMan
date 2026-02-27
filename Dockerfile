@@ -15,7 +15,7 @@ RUN npm ci --omit=dev
 
 FROM node:24-alpine AS node-build-env
 COPY ./MiddleMan.Web/ClientApp /app/
-COPY --from=node-development-dependencies-env /app/node_modules /app/node_modules
+COPY --from=node-production-dependencies-env /app/node_modules /app/node_modules
 WORKDIR /app
 RUN npm run build
 

@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "MiddleMan.Web (HTTPS)",
+      "type": "dotnet",
+      "request": "launch",
+      "projectPath": "${workspaceFolder}/MiddleMan.Web/MiddleMan.Web.csproj",
+      "launchSettingsProfile": "https"
+    },
+    {
+      "name": "ClientApp watch",
+      "type": "pwa-node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "watch"],
+      "cwd": "${workspaceFolder}/MiddleMan.Web/ClientApp",
+      "console": "integratedTerminal",
+      "env": {
+        "BROWSER": "none"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "FullStack",
+      "configurations": ["MiddleMan.Web (HTTPS)", "ClientApp watch"]
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+using MiddleMan.Service.WebSocketClientConnections.Classes;
+
 namespace MiddleMan.Service.WebSocketClientConnections.ConnectionPicker
 {
   class RoundRobinConnectionPickerStrategy : IConnectionPickerStrategy

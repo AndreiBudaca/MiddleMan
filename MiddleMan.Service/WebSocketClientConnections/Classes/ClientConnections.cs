@@ -1,4 +1,4 @@
-namespace MiddleMan.Service.WebSocketClientConnections
+namespace MiddleMan.Service.WebSocketClientConnections.Classes
 {
   public class ClientConnections
   {

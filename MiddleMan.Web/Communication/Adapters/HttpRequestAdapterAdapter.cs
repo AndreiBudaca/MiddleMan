@@ -3,14 +3,21 @@ using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Communication.Adapters
 {
-  public class HttpRequestAdapterAdapter(HttpRequest request, HttpUser? user = null) : IDataWriterAdapter
+  public class HttpRequestAdapterAdapter(HttpRequest request, HttpUser? user = null, bool sendMetadata = false) : IDataWriterAdapter
   {
-    private readonly HttpRequestMetadata metadata = new (request, user);
+    private readonly HttpRequestMetadata metadata = new(request, user);
     private readonly Stream source = request.Body;
 
     public async IAsyncEnumerable<byte[]> Adapt()
     {
-      yield return metadata.SerializeJson();
+      if (sendMetadata)
+      {
+        yield return metadata.SerializeJson();
+      }
+      else
+      {
+        yield return BitConverter.GetBytes(0);
+      }
 
       var buffer = new byte[ServerCapabilities.MaxContentLength];
       var bytesRead = await source.ReadAsync(buffer.AsMemory(0, ServerCapabilities.MaxContentLength));

@@ -4,14 +4,14 @@ using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Controllers.ActionResults
 {
-  public class MiddleManClientResult : ActionResult
+  public class MiddleManClientStreamingResult : ActionResult
   {
     private readonly IAsyncEnumerable<byte[]>? response = null;
     private readonly CancellationToken cancellationToken = CancellationToken.None;
 
-    public MiddleManClientResult() { }
+    public MiddleManClientStreamingResult() { }
 
-    public MiddleManClientResult(IAsyncEnumerable<byte[]> response, CancellationToken cancellationToken)
+    public MiddleManClientStreamingResult(IAsyncEnumerable<byte[]> response, CancellationToken cancellationToken)
     {
       this.response = response;
       this.cancellationToken = cancellationToken;
@@ -23,9 +23,9 @@ namespace MiddleMan.Web.Controllers.ActionResults
 
       var defaultResponseMetadata = new HttpResponseMetadata()
       {
-        Headers = new List<HttpHeader>()
+        Headers = new Dictionary<string, string?>()
         {
-          new HttpHeader() { Name = "Content-Type", Value = "application/octet-stream" },
+          ["Content-Type"] = "application/octet-stream",
         },
       };
 

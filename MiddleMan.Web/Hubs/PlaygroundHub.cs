@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Core;
 using MiddleMan.Service.WebSocketClientConnections;
+using MiddleMan.Service.WebSocketClientConnections.Classes;
 using MiddleMan.Service.WebSocketClientMethods;
 using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Web.Communication;
@@ -14,13 +15,13 @@ namespace MiddleMan.Web.Hubs
   [Authorize]
   public class PlaygroundHub(IWebSocketClientsService webSocketClientsService,
     IWebSocketClientMethodService webSocketClientMethodService,
-    CommunicationManager communicationManager,
+    StreamingCommunicationManager communicationManager,
     IWebSocketClientConnectionsService webSocketClientConnectionsService) : Hub
   {
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
     private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
     private readonly IWebSocketClientMethodService webSocketClientMethodService = webSocketClientMethodService;
-    private readonly CommunicationManager communicationManager = communicationManager;
+    private readonly StreamingCommunicationManager communicationManager = communicationManager;
 
     #region [Clinet connection hooks]
     public override async Task OnConnectedAsync()
@@ -65,19 +66,30 @@ namespace MiddleMan.Web.Hubs
       await webSocketClientMethodService.ReceiveMethodsAsync(id, name, channelReader.ReadAllAsync(), CancellationToken.None);
     }
 
-    public async Task<ServerInfoModel> ServerInfo()
+    public async Task<ServerInfoModel> Negociate(ClientInfoModel clientInfo)
     {
       var id = Context.User!.Identifier();
       var name = Context.User!.Name();
-
       await ConnectionChecks(id, name);
+
+      if (clientInfo == null) return new ServerInfoModel { IsAccepted = false };
+      if (!ServerCapabilities.AllowedVersions.Contains(clientInfo.Version)) return new ServerInfoModel { IsAccepted = false };
+
+      var canAcceptClient = await webSocketClientConnectionsService.AddWebSockerClientConnectionCapabilities(id, name,
+      new ClientCapabilities
+      {
+        Version = clientInfo.Version,
+        SupportsStreaming = clientInfo.SupportsStreaming,
+        SendHTTPMetadata = clientInfo.SendHTTPMetadata,
+      });
+      if (!canAcceptClient) return new ServerInfoModel { IsAccepted = false };
 
       var client = await webSocketClientsService.GetWebSocketClient(id, name);
       return new ServerInfoModel
       {
+        IsAccepted = true,
         MaxMessageLength = ServerCapabilities.MaxContentLength,
         MethodSignature = client?.Signature,
-        AcceptedVersions = ServerCapabilities.AllowedVersions
       };
     }
     #endregion
