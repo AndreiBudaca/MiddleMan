@@ -2,7 +2,7 @@ services:
   middleman:
     image: andyyy2k/middleman:1.0
     env_file:
-      - .env
+      - middleman.env
     environment:
       - ConnectionStrings__Redis=redis:6379
       - ASPNETCORE_HTTP_PORTS=80
@@ -13,12 +13,21 @@ services:
     ports:
       - "80:80"
 
+  postgress_db:
+    image: postgres
+    restart: always
+    shm_size: 128mb
+    env_file:
+      - postgress.env
+    volumes:
+      - ./db_init:/docker-entrypoint-initdb.d
+    networks:
+      - middleman-net
+
   redis:
     image: redis:7.2
     networks:
       - middleman-net
-    ports:
-      - "6379:6379"
 
 networks:
   middleman-net:
