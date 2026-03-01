@@ -75,14 +75,17 @@ namespace MiddleMan.Web.Hubs
       if (clientInfo == null) return new ServerInfoModel { IsAccepted = false };
       if (!ServerCapabilities.AllowedVersions.Contains(clientInfo.Version)) return new ServerInfoModel { IsAccepted = false };
 
-      var canAcceptClient = await webSocketClientConnectionsService.AddWebSockerClientConnectionCapabilities(id, name,
-      new ClientCapabilities
-      {
-        Version = clientInfo.Version,
-        SupportsStreaming = clientInfo.SupportsStreaming,
-        SendHTTPMetadata = clientInfo.SendHTTPMetadata,
-      });
-      if (!canAcceptClient) return new ServerInfoModel { IsAccepted = false };
+      await webSocketClientConnectionsService.AddWebSockerClientConnectionCapabilities(
+        id,
+        name,
+        Context.ConnectionId,
+        new ClientCapabilities
+        {
+          Version = clientInfo.Version,
+          SupportsStreaming = clientInfo.SupportsStreaming,
+          SendHTTPMetadata = clientInfo.SendHTTPMetadata,
+        }
+      );
 
       var client = await webSocketClientsService.GetWebSocketClient(id, name);
       return new ServerInfoModel

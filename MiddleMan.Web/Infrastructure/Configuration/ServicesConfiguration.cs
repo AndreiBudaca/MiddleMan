@@ -18,8 +18,8 @@ namespace MiddleMan.Web.Infrastructure.Configuration
       services.AddSingleton<IInMemoryContext, PureInMemoryContext>();
       services.AddSingleton<ISharedInMemoryContext, RedisContext>(service =>
         new RedisContext(service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis)!));
-      services.AddScoped<IDbConnectionFactory, SqliteConnectionFactory>(service => 
-        new SqliteConnectionFactory(service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Sqlite)!));
+      services.AddScoped<IDbConnectionFactory, PostgresConnectionFactory>(service => 
+        new PostgresConnectionFactory(service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Postgres)!));
 
       // Add services
       services.AddScoped<IClientRepository, ClientRepository>();

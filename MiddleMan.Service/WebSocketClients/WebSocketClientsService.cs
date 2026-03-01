@@ -52,8 +52,14 @@ namespace MiddleMan.Service.WebSocketClients
         }
       ]);
 
-      var connectedClients = await webSocketClientConnectionsService.GetConnectedWebSocketClientConnections(identifier);
-      return clientData.Select(x => BuildDto(x, connectedClients.Any(c => c == x.Name)));
+      var clients = new List<WebSocketClientDto>();
+      foreach (var client in clientData)
+      {
+        var isConnected = await webSocketClientConnectionsService.ExistsWebSocketClientConnection(identifier, client.Name);
+        clients.Add(BuildDto(client, isConnected));
+      }
+
+      return clients;
     }
 
     public async Task<byte[]?> UpdateWebSocketClientToken(string identifier, string name, string? token)

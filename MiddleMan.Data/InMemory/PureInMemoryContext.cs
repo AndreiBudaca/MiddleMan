@@ -2,9 +2,11 @@
 {
   public class PureInMemoryContext : IInMemoryContext
   {
-    private readonly Dictionary<string, Dictionary<string, object?>> _hashes = new();
+    private readonly Dictionary<string, Dictionary<string, object?>> _hashes = [];
+    private readonly Dictionary<string, List<object?>> _lists = [];
     private readonly object _lock = new();
 
+    #region [Hash Operations]
     public Task AddToHash<T>(string hashKey, string elementKey, T element)
     {
       lock (_lock)
@@ -82,5 +84,85 @@
         return Task.CompletedTask;
       }
     }
+    #endregion
+
+    #region [List Operations]
+    public Task AddToList<T>(string listKey, T element)
+    {
+      lock (_lock)
+      {
+        if (!_lists.TryGetValue(listKey, out List<object?>? list))
+        {
+          list = [];
+          _lists[listKey] = list;
+        }
+
+        list.Add(element);
+      }
+
+      return Task.CompletedTask;
+    }
+
+    public Task RemoveFromList<T>(string listKey, T element)
+    {
+      lock (_lock)
+      {
+        if (_lists.TryGetValue(listKey, out List<object?>? list))
+        {
+          list.Remove(element);
+        }
+      }
+
+      return Task.CompletedTask;
+    }
+
+    public Task<T?> GetRandomFromList<T>(string listKey)
+    {
+      lock (_lock)
+      {
+        if (_lists.TryGetValue(listKey, out List<object?>? list) && list.Count > 0)
+        {
+          if (list.Count == 1)
+          {
+            return Task.FromResult((T?)list[0]);
+          }
+
+          var random = new Random();
+          int index = random.Next(list.Count);
+          return Task.FromResult((T?)list[index]);
+        }
+        else
+        {
+          throw new InvalidOperationException($"List with key '{listKey}' does not exist or is empty.");
+        }
+      }
+    }
+
+    public Task<long> ListCount(string listKey)
+    {
+      lock (_lock)
+      {
+        if (_lists.TryGetValue(listKey, out List<object?>? list))
+        {
+          return Task.FromResult((long)list.Count);
+        }
+
+        return Task.FromResult(0L);
+      }
+    }
+
+    public Task<List<T?>> GetAllFromList<T>(string listKey)
+    {
+      lock (_lock)
+      {
+        if (_lists.TryGetValue(listKey, out List<object?>? list))
+        {
+          return Task.FromResult(list.Cast<T?>().ToList());
+        }
+
+        return Task.FromResult(new List<T?>());
+      }
+    }
+    #endregion
   }
 }

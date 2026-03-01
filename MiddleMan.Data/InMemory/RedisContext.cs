@@ -7,6 +7,7 @@ namespace MiddleMan.Data.InMemory
   {
     private readonly IDatabase database;
 
+    #region [Hash Operations]
     public RedisContext(string connectionString)
     {
       ConnectionMultiplexer redis = ConnectionMultiplexer.Connect(connectionString);
@@ -43,5 +44,54 @@ namespace MiddleMan.Data.InMemory
 
       return JsonSerializer.Deserialize<T>(element!);
     }
+    #endregion
+
+    #region [List Operations]
+    public async Task AddToList<T>(string listKey, T element)
+    {
+      var jsonData = JsonSerializer.Serialize(element);
+      await database.ListRightPushAsync(listKey, jsonData);
+    }
+
+    public async Task RemoveFromList<T>(string listKey, T element)
+    {
+      var jsonData = JsonSerializer.Serialize(element);
+      await database.ListRemoveAsync(listKey, jsonData);
+    }
+
+    public async Task<T?> GetRandomFromList<T>(string listKey)
+    {
+      var lua = @"
+        local len = redis.call('LLEN', KEYS[1])
+        if len == 0 then
+          return nil
+        end
+        if len == 1 then
+          return redis.call('LINDEX', KEYS[1], 0)
+        end
+        local t = redis.call('TIME')
+        math.randomseed(tonumber(t[2]))
+        local idx = math.random(0, len-1)
+        return redis.call('LINDEX', KEYS[1], idx)
+        ";
+
+      var result = await database.ScriptEvaluateAsync(lua, [listKey]);
+      if (result.IsNull) return default;
+      
+      return JsonSerializer.Deserialize<T>(result.ToString());
+    }
+
+    public Task<long> ListCount(string listKey)
+    {
+      return database.ListLengthAsync(listKey);
+    }
+
+    public async Task<List<T?>> GetAllFromList<T>(string listKey)
+    {
+      var elements = await database.ListRangeAsync(listKey);
+      return elements.Select(e => JsonSerializer.Deserialize<T>(e.ToString())).ToList();
+    }
+
+    #endregion
   }
 }

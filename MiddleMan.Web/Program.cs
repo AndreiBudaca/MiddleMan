@@ -44,7 +44,7 @@ namespace MiddleMan.Web
         options.StreamBufferCapacity = 1;
         options.MaximumReceiveMessageSize = ServerCapabilities.MaxContentLength * 2;
         options.MaximumParallelInvocationsPerClient = 10;
-        options.EnableDetailedErrors = true;
+        options.EnableDetailedErrors = builder.Environment.IsDevelopment();
       }).AddMessagePackProtocol();
 
       builder.Services.AddServices();
@@ -59,14 +59,12 @@ namespace MiddleMan.Web
         .AddJWTAuthentication(builder.Configuration);
 
       builder.Services
-        .AddAuthorization(options =>
-        {
-          options.DefaultPolicy = new AuthorizationPolicyBuilder(
+        .AddAuthorizationBuilder()
+        .SetDefaultPolicy(new AuthorizationPolicyBuilder(
               JwtBearerDefaults.AuthenticationScheme,
               CookieAuthenticationDefaults.AuthenticationScheme)
             .RequireAuthenticatedUser()
-            .Build();
-        });
+            .Build());
 
       var app = builder.Build();
 

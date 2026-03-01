@@ -1,19 +1,19 @@
-﻿using Dapper;
+﻿using System.Data;
+using Dapper;
 using MiddleMan.Data.Persistency.Classes;
 using MiddleMan.Data.Persistency.ConnectionFactory;
 using MiddleMan.Data.Persistency.Entities;
 
 namespace MiddleMan.Data.Persistency
 {
-  public interface IClientRepository : IRepository<Client, (string clientId, string name)> { }
+  public interface IClientRepository : IRepository<Client, (string clientId, string name)>, IDisposable { }
 
   public class ClientRepository(IDbConnectionFactory dbConnectionFactory) : IClientRepository
   {
-    private readonly IDbConnectionFactory _connectionFactory = dbConnectionFactory;
+    private readonly IDbConnection connection = dbConnectionFactory.CreateConnection();
 
     public async Task<(string clientId, string name)> AddAsync(Client entity)
     {
-      using var connection = _connectionFactory.CreateConnection();
       var query = $@"INSERT INTO Clients ({Client.Columns.UserId}, {Client.Columns.Name}, {Client.Columns.MethodInfoUrl}, {Client.Columns.Signatures}, {Client.Columns.TokenHash})
                     VALUES (@{Client.Columns.UserId}, @{Client.Columns.Name}, @{Client.Columns.MethodInfoUrl}, @{Client.Columns.Signatures}, @{Client.Columns.TokenHash});
                     SELECT @{Client.Columns.UserId} AS clientId, @{Client.Columns.Name} AS name;";
@@ -22,35 +22,30 @@ namespace MiddleMan.Data.Persistency
 
     public async Task DeleteAsync((string clientId, string name) key)
     {
-      using var connection = _connectionFactory.CreateConnection();
       var query = $"DELETE FROM Clients WHERE {Client.Columns.UserId} = @clientId AND {Client.Columns.Name} = @name;";
       await connection.ExecuteAsync(query, new { key.clientId, key.name });
     }
 
     public Task<bool> ExistsAsync((string clientId, string name) key)
     {
-      using var connection = _connectionFactory.CreateConnection();
       var query = $"SELECT COUNT(1) FROM Clients WHERE {Client.Columns.UserId} = @clientId AND {Client.Columns.Name} = @name;";
       return connection.ExecuteScalarAsync<bool>(query, new { key.clientId, key.name });
     }
 
     public async Task<IEnumerable<Client>> GetAllAsync()
     {
-      using var connection = _connectionFactory.CreateConnection();
       var query = "SELECT * FROM Clients;";
       return await connection.QueryAsync<Client>(query);
     }
 
     public async Task<Client?> GetByIdAsync((string clientId, string name) key)
     {
-      using var connection = _connectionFactory.CreateConnection();
       var query = $"SELECT * FROM Clients WHERE {Client.Columns.UserId} = @clientId AND {Client.Columns.Name} = @name;";
       return await connection.QuerySingleOrDefaultAsync<Client>(query, new { key.clientId, key.name });
     }
 
     public async Task UpdateAsync(Client entity)
     {
-      using var connection = _connectionFactory.CreateConnection();
       var query = $@"UPDATE Clients
                     SET {Client.Columns.MethodInfoUrl} = @{Client.Columns.MethodInfoUrl},
                         {Client.Columns.Signatures} = @{Client.Columns.Signatures},
@@ -62,8 +57,6 @@ namespace MiddleMan.Data.Persistency
 
     public async Task UpdateAsync((string clientId, string name) key, List<ColumnInfo> updateValues)
     {
-      using var connection = _connectionFactory.CreateConnection();
-
       var setClauses = string.Join(", ", updateValues.Select(p => $"{p.ColumnName} = @{p.ColumnName}"));
       var query = $"UPDATE Clients SET {setClauses} WHERE {Client.Columns.UserId} = @clientId AND {Client.Columns.Name} = @name;";
 
@@ -81,8 +74,6 @@ namespace MiddleMan.Data.Persistency
 
     public async Task<IEnumerable<Client>> GetByConditions(List<ColumnInfo> searchValues)
     {
-      using var connection = _connectionFactory.CreateConnection();
-
       var whereClauses = string.Join("AND", searchValues.Select(p => $"{p.ColumnName} = @{p.ColumnName}"));
       var query = $"SELECT * FROM Clients WHERE {whereClauses};";
 
@@ -94,6 +85,12 @@ namespace MiddleMan.Data.Persistency
       }
 
       return await connection.QueryAsync<Client>(query, parameters);
+    }
+
+    public void Dispose()
+    {
+      connection?.Dispose();
+      GC.SuppressFinalize(this);
     }
   }
 }
