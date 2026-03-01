@@ -131,10 +131,8 @@
           int index = random.Next(list.Count);
           return Task.FromResult((T?)list[index]);
         }
-        else
-        {
-          throw new InvalidOperationException($"List with key '{listKey}' does not exist or is empty.");
-        }
+        
+        return Task.FromResult<T?>(default);
       }
     }
 
