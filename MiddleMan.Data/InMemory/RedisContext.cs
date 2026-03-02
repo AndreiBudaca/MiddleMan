@@ -114,12 +114,14 @@ namespace MiddleMan.Data.InMemory
     {
       _ = await database.BLPopAsync(BoundedTokensKey(key), ServerCapabilities.GlobalTimeoutSeconds);
       await database.ListRightPushAsync(BoundedChunksKey(key), rawBytes);
+      await database.KeyExpireAsync(BoundedChunksKey(key), TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds));
     }
 
     public async Task<byte[]?> GetRawBytesFromBoundedList(string key)
     {
       var response = await database.ExecuteAsync("BLPOP", BoundedChunksKey(key), ServerCapabilities.GlobalTimeoutSeconds);
       await database.ListRightPushAsync(BoundedTokensKey(key), RedisValue.EmptyString);
+      await database.KeyExpireAsync(BoundedTokensKey(key), TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds));
 
       if (response.IsNull) return null;
       var responseArray = (RedisResult[]?)response;

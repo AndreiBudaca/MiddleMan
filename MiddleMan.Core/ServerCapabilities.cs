@@ -6,7 +6,7 @@
     
     public const int IntraServerBufferedChunks = 10;
 
-    public const int GlobalTimeoutSeconds = 6000;
+    public const int GlobalTimeoutSeconds = 60;
 
     public static readonly int[] AllowedVersions = [0];
 
