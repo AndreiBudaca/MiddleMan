@@ -75,10 +75,14 @@
     {
       lock (_lock)
       {
-        var hashExists = _hashes.TryGetValue(hashKey, out Dictionary<string, object?>? hash);
+        var hashExists = _hashes.TryGetValue(hashKey, out Dictionary<string, object?>? hash) && hash != null;
         if (hashExists)
         {
           hash!.Remove(elementKey);
+          if (hash.Count == 0)
+          {
+            _hashes.Remove(hashKey);
+          }
         }
 
         return Task.CompletedTask;
@@ -110,6 +114,10 @@
         if (_lists.TryGetValue(listKey, out List<object?>? list))
         {
           list.Remove(element);
+          if (list.Count == 0)
+          {
+            _lists.Remove(listKey);
+          }
         }
       }
 

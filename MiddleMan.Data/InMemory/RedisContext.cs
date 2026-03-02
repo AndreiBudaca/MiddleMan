@@ -1,7 +1,6 @@
 ﻿using MiddleMan.Core;
 using NRedisStack;
 using StackExchange.Redis;
-using System.Text;
 using System.Text.Json;
 
 namespace MiddleMan.Data.InMemory
@@ -19,8 +18,10 @@ namespace MiddleMan.Data.InMemory
       ConnectionMultiplexer redis = ConnectionMultiplexer.Connect(new ConfigurationOptions
       {
         EndPoints = { connectionString },
-        ConnectTimeout = ServerCapabilities.GlobalTimeoutSeconds * 1000,
+        AsyncTimeout = ServerCapabilities.GlobalTimeoutSeconds * 1000,
+        SyncTimeout = ServerCapabilities.GlobalTimeoutSeconds * 1000,
       });
+
       database = redis.GetDatabase();
     }
 
@@ -114,6 +115,8 @@ namespace MiddleMan.Data.InMemory
     {
       _ = await database.BLPopAsync(BoundedTokensKey(key), ServerCapabilities.GlobalTimeoutSeconds);
       await database.ListRightPushAsync(BoundedChunksKey(key), rawBytes);
+
+      // Refresh TTL for chunks
       await database.KeyExpireAsync(BoundedChunksKey(key), TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds));
     }
 
@@ -121,7 +124,6 @@ namespace MiddleMan.Data.InMemory
     {
       var response = await database.ExecuteAsync("BLPOP", BoundedChunksKey(key), ServerCapabilities.GlobalTimeoutSeconds);
       await database.ListRightPushAsync(BoundedTokensKey(key), RedisValue.EmptyString);
-      await database.KeyExpireAsync(BoundedTokensKey(key), TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds));
 
       if (response.IsNull) return null;
       var responseArray = (RedisResult[]?)response;

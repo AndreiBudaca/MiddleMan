@@ -7,6 +7,7 @@ using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Web.Communication;
 using MiddleMan.Core;
+using MiddleMan.Service.WebSocketClientInvocationSession;
 
 namespace MiddleMan.Web.Infrastructure.Configuration
 {
@@ -27,6 +28,7 @@ namespace MiddleMan.Web.Infrastructure.Configuration
       services.AddScoped<IWebSocketClientsService, WebSocketClientsService>();
       services.AddScoped<IWebSocketClientMethodService, WebSocketClientMethodService>();
       services.AddScoped<IWebSocketClientConnectionsService, WebSocketClientConnectionsService>();
+      services.AddScoped<IWebSocketClientInvocationSessionService, WebSocketClientInvocationSessionService>();
 
       // Add communication hub
       services.AddSingleton<StreamingCommunicationManager>();

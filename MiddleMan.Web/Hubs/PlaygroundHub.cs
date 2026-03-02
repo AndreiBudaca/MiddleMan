@@ -1,14 +1,14 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Core;
-using MiddleMan.Data.InMemory;
 using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
+using MiddleMan.Service.WebSocketClientInvocationSession;
+using MiddleMan.Service.WebSocketClientInvocationSession.Enums;
 using MiddleMan.Service.WebSocketClientMethods;
 using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Web.Communication;
 using MiddleMan.Web.Communication.Adapters;
-using MiddleMan.Web.Communication.Constants;
 using MiddleMan.Web.Hubs.Models;
 using MiddleMan.Web.Infrastructure.Identity;
 using System.Threading.Channels;
@@ -20,13 +20,13 @@ namespace MiddleMan.Web.Hubs
     IWebSocketClientMethodService webSocketClientMethodService,
     StreamingCommunicationManager communicationManager,
     IWebSocketClientConnectionsService webSocketClientConnectionsService,
-    ISharedInMemoryContext sharedInMemoryContext) : Hub
+    IWebSocketClientInvocationSessionService webSocketClientInvocationSessionService) : Hub
   {
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
     private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
     private readonly IWebSocketClientMethodService webSocketClientMethodService = webSocketClientMethodService;
+    private readonly IWebSocketClientInvocationSessionService webSocketClientInvocationSessionService = webSocketClientInvocationSessionService;
     private readonly StreamingCommunicationManager communicationManager = communicationManager;
-    private readonly ISharedInMemoryContext sharedInMemoryContext = sharedInMemoryContext;
 
     #region [Clinet connection hooks]
     public override async Task OnConnectedAsync()
@@ -109,18 +109,20 @@ namespace MiddleMan.Web.Hubs
       var name = Context.User!.Name();
       await ConnectionChecks(id, name);
 
-      var sameServerInvocations = false;
+      var sameServerInvocations = await webSocketClientInvocationSessionService.ExistsSession(correlation);
       await communicationManager.RegisterSessionReaderChannelAsync(channelReader, correlation, sameServerInvocations);
 
       if (!sameServerInvocations)
       {
+        // Pass request data to the actual client
         await communicationManager.WriteAsync(
-          new RedisBoundedListAdapter(IntraServerCommunicationConstants.InvocationChannelName(correlation), sharedInMemoryContext),
-          correlation);
+          new IntraServerSessionDataAdapter(webSocketClientInvocationSessionService, correlation, SessionDataTypes.Request),
+          correlation
+        );
 
-        var producer = new IntraServerCommunicationProducer(sharedInMemoryContext);
-        await producer.WriteAsync(communicationManager.ReadAsync(correlation),
-         IntraServerCommunicationConstants.ResponseChannelName(correlation));
+        // Return response data to the invoking server
+        var intraServerCommunicationManager = new IntraServerCommunicationManager(webSocketClientInvocationSessionService);
+        await intraServerCommunicationManager.WriteAsync(communicationManager.ReadAsync(correlation), correlation, SessionDataTypes.Response);
       }
     }
 
