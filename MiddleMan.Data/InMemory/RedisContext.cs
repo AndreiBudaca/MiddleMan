@@ -1,4 +1,7 @@
-﻿using StackExchange.Redis;
+﻿using MiddleMan.Core;
+using NRedisStack;
+using StackExchange.Redis;
+using System.Text;
 using System.Text.Json;
 
 namespace MiddleMan.Data.InMemory
@@ -7,10 +10,17 @@ namespace MiddleMan.Data.InMemory
   {
     private readonly IDatabase database;
 
+    private static string BoundedTokensKey(string key) => $"{key}:tokens";
+    private static string BoundedChunksKey(string key) => $"{key}:chunks";
+
     #region [Hash Operations]
     public RedisContext(string connectionString)
     {
-      ConnectionMultiplexer redis = ConnectionMultiplexer.Connect(connectionString);
+      ConnectionMultiplexer redis = ConnectionMultiplexer.Connect(new ConfigurationOptions
+      {
+        EndPoints = { connectionString },
+        ConnectTimeout = ServerCapabilities.GlobalTimeoutSeconds * 1000,
+      });
       database = redis.GetDatabase();
     }
 
@@ -77,7 +87,7 @@ namespace MiddleMan.Data.InMemory
 
       var result = await database.ScriptEvaluateAsync(lua, [listKey]);
       if (result.IsNull) return default;
-      
+
       return JsonSerializer.Deserialize<T>(result.ToString());
     }
 
@@ -91,7 +101,38 @@ namespace MiddleMan.Data.InMemory
       var elements = await database.ListRangeAsync(listKey);
       return elements.Select(e => JsonSerializer.Deserialize<T>(e.ToString())).ToList();
     }
+    #endregion
 
+    #region [Bounded lists]
+    public async Task CreateBoundedList(string key, int maxCount)
+    {
+      var values = Enumerable.Repeat(RedisValue.EmptyString, maxCount).ToArray();
+      await database.ListRightPushAsync(BoundedTokensKey(key), values);
+    }
+
+    public async Task AddRawBytesToBoundedList(string key, byte[] rawBytes)
+    {
+      _ = await database.BLPopAsync(BoundedTokensKey(key), ServerCapabilities.GlobalTimeoutSeconds);
+      await database.ListRightPushAsync(BoundedChunksKey(key), rawBytes);
+    }
+
+    public async Task<byte[]?> GetRawBytesFromBoundedList(string key)
+    {
+      var response = await database.ExecuteAsync("BLPOP", BoundedChunksKey(key), ServerCapabilities.GlobalTimeoutSeconds);
+      await database.ListRightPushAsync(BoundedTokensKey(key), RedisValue.EmptyString);
+
+      if (response.IsNull) return null;
+      var responseArray = (RedisResult[]?)response;
+      if (responseArray == null || responseArray.Length < 2) return null;
+      var bytes = (byte[]?)responseArray[1];
+      
+      return bytes;
+    }
+
+    public async Task TerminateBoundedList(string key)
+    {
+      await database.KeyDeleteAsync(BoundedTokensKey(key));
+    }
     #endregion
   }
 }

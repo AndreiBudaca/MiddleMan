@@ -2,10 +2,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Core;
+using MiddleMan.Data.InMemory;
 using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
 using MiddleMan.Web.Communication;
 using MiddleMan.Web.Communication.Adapters;
+using MiddleMan.Web.Communication.Constants;
 using MiddleMan.Web.Communication.Metadata;
 using MiddleMan.Web.Controllers.ActionResults;
 using MiddleMan.Web.Hubs;
@@ -20,11 +22,13 @@ namespace MiddleMan.Web.Controllers.WebSockets
   public class WebSocketsController(
     IHubContext<PlaygroundHub> hubContext,
     StreamingCommunicationManager communicationManager,
-    IWebSocketClientConnectionsService webSocketClientConnectionsService) : Controller
+    IWebSocketClientConnectionsService webSocketClientConnectionsService,
+    ISharedInMemoryContext sharedInMemoryContext) : Controller
   {
     private readonly IHubContext<PlaygroundHub> hubContext = hubContext;
     private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
     private readonly StreamingCommunicationManager communicationManager = communicationManager;
+    private readonly ISharedInMemoryContext sharedInMemoryContext = sharedInMemoryContext;
 
     [RequestSizeLimit(1_000_000_000)]
     [Route("{webSocketClientName}/{method}/{*rest}")]
@@ -81,9 +85,28 @@ namespace MiddleMan.Web.Controllers.WebSockets
         Identifier = User.Identifier(),
       }, webSocketClientConnection.ClientCapabilities.SendHTTPMetadata);
 
+      return webSocketClientConnection.IsConnectedToCurrentServer ?
+        await SameServerStreamInvocation(correlation, adapter, cancellationToken) :
+        await IntraServerStreamInvocation(correlation, adapter, cancellationToken);
+    }
+
+    private async Task<IActionResult> SameServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter,
+      CancellationToken cancellationToken)
+    {
       await communicationManager.WriteAsync(adapter, correlation);
 
       return new MiddleManClientStreamingResult(communicationManager.ReadAsync(correlation), cancellationToken);
+    }
+
+    private async Task<IActionResult> IntraServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter,
+     CancellationToken cancellationToken)
+    {
+      var producer = new IntraServerCommunicationProducer(sharedInMemoryContext);
+      await producer.WriteAsync(adapter, IntraServerCommunicationConstants.InvocationChannelName(correlation));
+
+      return new MiddleManClientStreamingResult(
+        new RedisBoundedListAdapter(IntraServerCommunicationConstants.ResponseChannelName(correlation), sharedInMemoryContext),
+        cancellationToken);
     }
 
     private bool RequiresStreaming => HttpContext.Request.ContentLength > ServerCapabilities.MaxContentLength;

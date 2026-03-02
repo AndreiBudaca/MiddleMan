@@ -6,7 +6,7 @@ namespace MiddleMan.Service.WebSocketClientConnections
   public class WebSocketClientConnectionsService(IInMemoryContext inMemoryContext,
     ISharedInMemoryContext sharedInMemoryContext) : IWebSocketClientConnectionsService
   {
-    private readonly IInMemoryContext inMemoryContext = inMemoryContext;
+    private readonly IInMemoryContext intanceInMemoryContext = inMemoryContext;
     private readonly ISharedInMemoryContext sharedInMemoryContext = sharedInMemoryContext;
     private const string WebSocketCapabilitesHashKey = "WebSocketClientCapabilities";
     private static string WebSocketConnectionsKey(string identifier, string name) => $"WebSocketClientConnections:{identifier}:{name}";
@@ -19,14 +19,14 @@ namespace MiddleMan.Service.WebSocketClientConnections
 
     public async Task AddWebSocketClientConnection(string identifier, string name, string connectionId)
     {
-      await inMemoryContext.AddToList(WebSocketConnectionsKey(identifier, name), connectionId);
+      await intanceInMemoryContext.AddToList(WebSocketConnectionsKey(identifier, name), connectionId);
       await sharedInMemoryContext.AddToList(WebSocketConnectionsKey(identifier, name), connectionId);
     }
 
     public async Task<ClientConnection> GetWebSocketClientConnection(string identifier, string name)
     {
       var isConnectedToCurrentServer = true;
-      var clientConnection = await inMemoryContext.GetRandomFromList<string>(WebSocketConnectionsKey(identifier, name));
+      var clientConnection = await intanceInMemoryContext.GetRandomFromList<string>(WebSocketConnectionsKey(identifier, name));
       
       if (clientConnection == null)
       {
@@ -35,7 +35,7 @@ namespace MiddleMan.Service.WebSocketClientConnections
       }
 
       if (clientConnection == null) return new ClientConnection();
-      var capabilities = await inMemoryContext.GetFromHash<ClientCapabilities>(WebSocketCapabilitesHashKey, clientConnection);
+      var capabilities = await sharedInMemoryContext.GetFromHash<ClientCapabilities>(WebSocketCapabilitesHashKey, clientConnection);
       
       return new ClientConnection
       {
@@ -47,8 +47,8 @@ namespace MiddleMan.Service.WebSocketClientConnections
 
     public async Task DeleteWebSocketClientConnection(string identifier, string namem, string connectionId)
     {
-      await inMemoryContext.RemoveFromHash(WebSocketCapabilitesHashKey, connectionId);
-      await inMemoryContext.RemoveFromList(WebSocketConnectionsKey(identifier, namem), connectionId);
+      await sharedInMemoryContext.RemoveFromHash(WebSocketCapabilitesHashKey, connectionId);
+      await intanceInMemoryContext.RemoveFromList(WebSocketConnectionsKey(identifier, namem), connectionId);
       await sharedInMemoryContext.RemoveFromList(WebSocketConnectionsKey(identifier, namem), connectionId);
     }
 
@@ -60,15 +60,15 @@ namespace MiddleMan.Service.WebSocketClientConnections
       {
         if (connection == null) continue;
 
-        await inMemoryContext.RemoveFromList(WebSocketConnectionsKey(identifier, name), connection);
+        await intanceInMemoryContext.RemoveFromList(WebSocketConnectionsKey(identifier, name), connection);
         await sharedInMemoryContext.RemoveFromList(WebSocketConnectionsKey(identifier, name), connection);
-        await inMemoryContext.RemoveFromHash(WebSocketCapabilitesHashKey, connection);
+        await sharedInMemoryContext.RemoveFromHash(WebSocketCapabilitesHashKey, connection);
       }
     }
 
     public Task AddWebSockerClientConnectionCapabilities(string identifier, string name, string connectionId, ClientCapabilities capabilities)
     {
-      return inMemoryContext.AddToHash(WebSocketCapabilitesHashKey, connectionId, capabilities);
+      return sharedInMemoryContext.AddToHash(WebSocketCapabilitesHashKey, connectionId, capabilities);
     }
   }
 }

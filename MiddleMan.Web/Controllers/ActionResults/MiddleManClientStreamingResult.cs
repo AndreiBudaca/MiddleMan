@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using MiddleMan.Core.Extensions;
+using MiddleMan.Web.Communication.Adapters;
 using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Controllers.ActionResults
@@ -14,6 +15,12 @@ namespace MiddleMan.Web.Controllers.ActionResults
     public MiddleManClientStreamingResult(IAsyncEnumerable<byte[]> response, CancellationToken cancellationToken)
     {
       this.response = response;
+      this.cancellationToken = cancellationToken;
+    }
+
+    public MiddleManClientStreamingResult(IDataWriterAdapter responseAdapter, CancellationToken cancellationToken)
+    {
+      this.response = responseAdapter.Adapt();
       this.cancellationToken = cancellationToken;
     }
 
@@ -37,7 +44,7 @@ namespace MiddleMan.Web.Controllers.ActionResults
       {
         var metadataBytes = await response.PrependItems(cancellationToken, metadataLengthBytes.CurrentEnumerationItem)
           .EnumerateUntil(metadataLength, 0, cancellationToken);
-        
+
         var metadataJson = System.Text.Encoding.UTF8.GetString(metadataBytes.Received, 0, metadataLength);
         var responseMetadata = System.Text.Json.JsonSerializer.Deserialize<HttpResponseMetadata>(metadataJson) ?? defaultResponseMetadata;
 
@@ -51,9 +58,9 @@ namespace MiddleMan.Web.Controllers.ActionResults
 
       // Write the rest of the response body
       await foreach (var chunk in response)
-        {
-          await context.HttpContext.Response.BodyWriter.WriteAsync(chunk, cancellationToken);
-        }
+      {
+        await context.HttpContext.Response.BodyWriter.WriteAsync(chunk, cancellationToken);
+      }
 
       await context.HttpContext.Response.BodyWriter.CompleteAsync();
     }

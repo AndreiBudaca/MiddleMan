@@ -14,7 +14,8 @@ namespace MiddleMan.Web.Communication
 
     private readonly AsyncResourceMonitor sessionWriteMonitor = new();
 
-    public async Task RegisterSessionReaderChannelAsync(ChannelReader<byte[]> channelReader, Guid correlation)
+    public async Task RegisterSessionReaderChannelAsync(ChannelReader<byte[]> channelReader,
+     Guid correlation, bool waitForReadToFinish = true)
     {
       await sessionReadMonitor.SetResourceAndNotify
       (
@@ -22,12 +23,15 @@ namespace MiddleMan.Web.Communication
         correlation
       );
 
-      _ = await sessionReadEndedMonitor.WaitToGetResource
-      (
-        async () => await context.GetFromHash<ChannelReader<byte[]>>("readers", correlation.ToString()),
-        (reader) => reader == null,
-        correlation
-      );
+      if (waitForReadToFinish)
+      {
+        _ = await sessionReadEndedMonitor.WaitToGetResource
+        (
+          async () => await context.GetFromHash<ChannelReader<byte[]>>("readers", correlation.ToString()),
+          (reader) => reader == null,
+          correlation
+        );
+      }
     }
 
     public async Task RegisterSessionWriterChannelAsync(ChannelWriter<byte[]> channelWriter, Guid correlation)
@@ -83,9 +87,9 @@ namespace MiddleMan.Web.Communication
       }
       else
       {
-        await foreach( var chunk in reader.ReadAllAsync())
+        await foreach (var chunk in reader.ReadAllAsync())
         {
-          yield return chunk; 
+          yield return chunk;
         }
       }
 
