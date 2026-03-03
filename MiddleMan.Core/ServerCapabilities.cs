@@ -4,7 +4,7 @@
   {
     public const int MaxContentLength = 32 * 1024; // 32KB
     
-    public const int IntraServerBufferedChunks = 10;
+    public const int IntraServerBufferedChunks = 1;
 
     public const int GlobalTimeoutSeconds = 60;
 

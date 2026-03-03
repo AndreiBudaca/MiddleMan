@@ -3,7 +3,7 @@ using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Communication.Adapters
 {
-  public class HttpRequestAdapterAdapter(HttpRequest request, HttpUser? user = null, bool sendMetadata = false) : IDataWriterAdapter
+  public class HttpRequestAdapter(HttpRequest request, HttpUser? user = null, bool sendMetadata = false) : IDataWriterAdapter
   {
     private readonly HttpRequestMetadata metadata = new(request, user);
     private readonly Stream source = request.Body;

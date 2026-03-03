@@ -114,15 +114,13 @@ namespace MiddleMan.Web.Hubs
 
       if (!sameServerInvocations)
       {
-        // Pass request data to the actual client
-        await communicationManager.WriteAsync(
-          new IntraServerSessionDataAdapter(webSocketClientInvocationSessionService, correlation, SessionDataTypes.Request),
-          correlation
-        );
-
-        // Return response data to the invoking server
         var intraServerCommunicationManager = new IntraServerCommunicationManager(webSocketClientInvocationSessionService);
-        await intraServerCommunicationManager.WriteAsync(communicationManager.ReadAsync(correlation), correlation, SessionDataTypes.Response);
+        var intraServerAdapter = new IntraServerSessionDataAdapter(webSocketClientInvocationSessionService, correlation, SessionDataTypes.Request);
+
+        await Task.WhenAll(
+          communicationManager.WriteAsync(intraServerAdapter.Adapt(),correlation),
+          intraServerCommunicationManager.WriteAsync(communicationManager.ReadAsync(correlation), correlation, SessionDataTypes.Response)
+        );
       }
     }
 

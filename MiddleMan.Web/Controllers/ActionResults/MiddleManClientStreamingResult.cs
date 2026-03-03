@@ -5,7 +5,7 @@ using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Controllers.ActionResults
 {
-  public class MiddleManClientStreamingResult : ActionResult
+  public class MiddleManClientStreamingResult : IControllerDefinedResult
   {
     private readonly IAsyncEnumerable<byte[]>? response = null;
     private readonly CancellationToken cancellationToken = CancellationToken.None;
@@ -24,7 +24,7 @@ namespace MiddleMan.Web.Controllers.ActionResults
       this.cancellationToken = cancellationToken;
     }
 
-    public override async Task ExecuteResultAsync(ActionContext context)
+    public async Task ApplyResultAsync(HttpContext context)
     {
       if (response == null) return;
 
@@ -48,21 +48,21 @@ namespace MiddleMan.Web.Controllers.ActionResults
         var metadataJson = System.Text.Encoding.UTF8.GetString(metadataBytes.Received, 0, metadataLength);
         var responseMetadata = System.Text.Json.JsonSerializer.Deserialize<HttpResponseMetadata>(metadataJson) ?? defaultResponseMetadata;
 
-        responseMetadata.Apply(context.HttpContext.Response);
-        await context.HttpContext.Response.BodyWriter.WriteAsync(metadataBytes.CurrentEnumerationItem, cancellationToken);
+        responseMetadata.Apply(context.Response);
+        await context.Response.BodyWriter.WriteAsync(metadataBytes.CurrentEnumerationItem, cancellationToken);
       }
       else
       {
-        defaultResponseMetadata.Apply(context.HttpContext.Response);
+        defaultResponseMetadata.Apply(context.Response);
       }
 
       // Write the rest of the response body
       await foreach (var chunk in response)
       {
-        await context.HttpContext.Response.BodyWriter.WriteAsync(chunk, cancellationToken);
+        await context.Response.BodyWriter.WriteAsync(chunk, cancellationToken);
       }
 
-      await context.HttpContext.Response.BodyWriter.CompleteAsync();
+      await context.Response.BodyWriter.CompleteAsync();
     }
   }
 }
