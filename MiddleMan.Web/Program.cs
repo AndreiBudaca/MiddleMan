@@ -98,8 +98,6 @@ namespace MiddleMan.Web
 
       app.MapHubs();
 
-      app.InitializeDb();
-
       app.Run();
     }
   }

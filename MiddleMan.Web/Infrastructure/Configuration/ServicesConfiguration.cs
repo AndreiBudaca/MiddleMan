@@ -19,11 +19,13 @@ namespace MiddleMan.Web.Infrastructure.Configuration
       services.AddSingleton<IInMemoryContext, PureInMemoryContext>();
       services.AddSingleton<ISharedInMemoryContext, RedisContext>(service =>
         new RedisContext(service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis)!));
-      services.AddScoped<IDbConnectionFactory, PostgresConnectionFactory>(service => 
-        new PostgresConnectionFactory(service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Postgres)!));
+      services.AddScoped<IDbConnectionFactory, MySQLConnectionFactory>(service => 
+        new MySQLConnectionFactory(service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.MySql)!));
 
-      // Add services
+      // Repositories
       services.AddScoped<IClientRepository, ClientRepository>();
+      
+      // Add services
       services.AddScoped<IBlobService, LocalFileSystemBlobService>();
       services.AddScoped<IWebSocketClientsService, WebSocketClientsService>();
       services.AddScoped<IWebSocketClientMethodService, WebSocketClientMethodService>();
@@ -32,13 +34,6 @@ namespace MiddleMan.Web.Infrastructure.Configuration
 
       // Add communication hub
       services.AddSingleton<StreamingCommunicationManager>();
-    }
-
-    public static void InitializeDb(this WebApplication app)
-    {
-      using var scope = app.Services.CreateScope();
-      var dbConnectionFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
-      SqliteDatabaseInitializer.Initialize(dbConnectionFactory);
     }
   }
 }

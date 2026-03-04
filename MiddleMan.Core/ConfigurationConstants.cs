@@ -21,6 +21,7 @@
       public const string Redis = "Redis";
       public const string Sqlite = "Sqlite";
       public const string Postgres = "Postgres";
+      public const string MySql = "MySql";
     }
   }
 }

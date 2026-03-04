@@ -13,17 +13,6 @@ services:
     ports:
       - "80:80"
 
-  postgress_db:
-    image: postgres
-    restart: always
-    shm_size: 128mb
-    env_file:
-      - postgress.env
-    volumes:
-      - ./db_init:/docker-entrypoint-initdb.d
-    networks:
-      - middleman-net
-
   redis:
     image: redis:7.2
     networks:
