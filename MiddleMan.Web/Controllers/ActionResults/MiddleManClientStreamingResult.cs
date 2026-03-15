@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using MiddleMan.Communication.Adapters;
 using MiddleMan.Core.Extensions;
 using MiddleMan.Web.Communication.Adapters;
 using MiddleMan.Web.Communication.Metadata;

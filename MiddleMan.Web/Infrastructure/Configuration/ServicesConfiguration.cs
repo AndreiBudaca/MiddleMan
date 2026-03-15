@@ -5,9 +5,9 @@ using MiddleMan.Service.Blobs;
 using MiddleMan.Service.WebSocketClientMethods;
 using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClients;
-using MiddleMan.Web.Communication;
 using MiddleMan.Core;
-using MiddleMan.Service.WebSocketClientInvocationSession;
+using MiddleMan.Communication;
+using MiddleMan.Communication.Channels;
 
 namespace MiddleMan.Web.Infrastructure.Configuration
 {
@@ -17,8 +17,6 @@ namespace MiddleMan.Web.Infrastructure.Configuration
     {
       // Add DB context
       services.AddSingleton<IInMemoryContext, PureInMemoryContext>();
-      services.AddSingleton<ISharedInMemoryContext, RedisContext>(service =>
-        new RedisContext(service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis)!));
       services.AddScoped<IDbConnectionFactory, MySQLConnectionFactory>(service => 
         new MySQLConnectionFactory(service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.MySql)!));
 
@@ -30,10 +28,18 @@ namespace MiddleMan.Web.Infrastructure.Configuration
       services.AddScoped<IWebSocketClientsService, WebSocketClientsService>();
       services.AddScoped<IWebSocketClientMethodService, WebSocketClientMethodService>();
       services.AddScoped<IWebSocketClientConnectionsService, WebSocketClientConnectionsService>();
-      services.AddScoped<IWebSocketClientInvocationSessionService, WebSocketClientInvocationSessionService>();
 
-      // Add communication hub
-      services.AddSingleton<StreamingCommunicationManager>();
+      // Add cummunication channels
+      services.AddSingleton<ICommunicationChannel, RedisCommunicationChannel>(service =>
+        new RedisCommunicationChannel(
+          service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis)!,
+          service.GetRequiredService<IInMemoryContext>())
+      );
+
+      // Add communication hubs
+      services.AddScoped<StreamingCommunicationManager>();
+      services.AddScoped<IntraServerCommunicationManager>();
+      services.AddScoped<ClientInfoCommunicationManager>();
     }
   }
 }

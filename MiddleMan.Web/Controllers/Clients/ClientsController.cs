@@ -70,7 +70,8 @@ namespace MiddleMan.Web.Controllers.Clients
         return NotFound();
       }
 
-      await webSocketClientConnectionsService.DeleteWebSocketClientConnection(User.Identifier(), clientName);
+      // TO DO
+      // await webSocketClientConnectionsService.DeleteWebSocketClientConnection(User.Identifier(), clientName);
 
       var token = TokenManager.Generate(new TokenData
       {
@@ -97,7 +98,8 @@ namespace MiddleMan.Web.Controllers.Clients
       }
 
       await webSocketClientsService.UpdateWebSocketClientToken(User.Identifier(), clientName, null);
-      await webSocketClientConnectionsService.DeleteWebSocketClientConnection(User.Identifier(), clientName);
+      // TO DO
+      // await webSocketClientConnectionsService.DeleteWebSocketClientConnection(User.Identifier(), clientName);
 
       return Ok(new WebSocketTokenDataModel());
     }

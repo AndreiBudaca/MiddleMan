@@ -3,19 +3,23 @@
   public interface IInMemoryContext
   {
     #region [Hash Operations]
-    Task<bool> ExistsInHash(string hashKey, string elementKey);
-    Task AddToHash<T>(string hashKey, string elementKey, T element);
-    Task<T?> GetFromHash<T>(string hashKey, string elementKey);
-    Task<Dictionary<string, T?>> GetAllFromHash<T>(string hashKey);
-    Task RemoveFromHash(string hashKey, string elementKey);
+    bool ExistsInHash(string hashKey, string elementKey);
+    void AddToHash<T>(string hashKey, string elementKey, T element);
+    T? GetFromHash<T>(string hashKey, string elementKey);
+    Dictionary<string, T?> GetAllFromHash<T>(string hashKey);
+    void RemoveFromHash(string hashKey, string elementKey);
     #endregion
 
     #region [List Operations]
-    Task AddToList<T>(string listKey, T element);
-    Task RemoveFromList<T>(string listKey, T element);
-    Task<List<T?>> GetAllFromList<T>(string listKey);
-    Task<T?> GetRandomFromList<T>(string listKey);
-    Task<long> ListCount(string listKey);
+    int AddToList<T>(string listKey, T element);
+    int AddToList<T>(string listKey, IEnumerable<T> elements);
+    int RemoveFromList<T>(string listKey, T element);
+    void RemoveList(string listKey);
+    List<T?> GetAllFromList<T>(string listKey);
+    T? GetRandomFromList<T>(string listKey);
+    T? PopList<T>(string listKey, bool removeListIfEmpty = true);
+    int ListCount(string listKey);
+    bool ExistsList(string listKey);
     #endregion
   }
 }

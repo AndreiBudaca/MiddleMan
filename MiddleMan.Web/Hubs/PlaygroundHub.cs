@@ -1,14 +1,11 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using MiddleMan.Communication;
 using MiddleMan.Core;
 using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
-using MiddleMan.Service.WebSocketClientInvocationSession;
-using MiddleMan.Service.WebSocketClientInvocationSession.Enums;
 using MiddleMan.Service.WebSocketClientMethods;
 using MiddleMan.Service.WebSocketClients;
-using MiddleMan.Web.Communication;
-using MiddleMan.Web.Communication.Adapters;
 using MiddleMan.Web.Hubs.Models;
 using MiddleMan.Web.Infrastructure.Identity;
 using System.Threading.Channels;
@@ -19,13 +16,15 @@ namespace MiddleMan.Web.Hubs
   public class PlaygroundHub(IWebSocketClientsService webSocketClientsService,
     IWebSocketClientMethodService webSocketClientMethodService,
     StreamingCommunicationManager communicationManager,
-    IWebSocketClientConnectionsService webSocketClientConnectionsService,
-    IWebSocketClientInvocationSessionService webSocketClientInvocationSessionService) : Hub
+    ClientInfoCommunicationManager clientInfoCommunicationManager,
+    IntraServerCommunicationManager intraServerCommunicationManager,
+    IWebSocketClientConnectionsService webSocketClientConnectionsService) : Hub
   {
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
     private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
     private readonly IWebSocketClientMethodService webSocketClientMethodService = webSocketClientMethodService;
-    private readonly IWebSocketClientInvocationSessionService webSocketClientInvocationSessionService = webSocketClientInvocationSessionService;
+    private readonly ClientInfoCommunicationManager clientInfoCommunicationManager = clientInfoCommunicationManager;
+    private readonly IntraServerCommunicationManager intraServerCommunicationManager = intraServerCommunicationManager;
     private readonly StreamingCommunicationManager communicationManager = communicationManager;
 
     #region [Clinet connection hooks]
@@ -42,7 +41,11 @@ namespace MiddleMan.Web.Hubs
         return;
       }
 
-      await webSocketClientConnectionsService.AddWebSocketClientConnection(id, name, Context.ConnectionId);
+      var onServerConnectionCount = webSocketClientConnectionsService.AddWebSocketClientConnection(id, name, Context.ConnectionId);
+      if (onServerConnectionCount == 1)
+      {
+        await clientInfoCommunicationManager.StartListening(id, name);
+      }
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
@@ -50,7 +53,11 @@ namespace MiddleMan.Web.Hubs
       var id = Context.User!.Identifier();
       var name = Context.User!.Name();
 
-      await webSocketClientConnectionsService.DeleteWebSocketClientConnection(id, name, Context.ConnectionId);
+      var onServerConnectionCount =  webSocketClientConnectionsService.DeleteWebSocketClientConnection(id, name, Context.ConnectionId);
+      if (onServerConnectionCount == 0)
+      {
+        await clientInfoCommunicationManager.StopListening(id, name);
+      }
     }
 
     private async Task<bool> AuthorizeClient(string id, string name, string? clientToken)
@@ -80,7 +87,7 @@ namespace MiddleMan.Web.Hubs
       if (clientInfo == null) return new ServerInfoModel { IsAccepted = false };
       if (!ServerCapabilities.AllowedVersions.Contains(clientInfo.Version)) return new ServerInfoModel { IsAccepted = false };
 
-      await webSocketClientConnectionsService.AddWebSockerClientConnectionCapabilities(
+      webSocketClientConnectionsService.AddWebSockerClientConnectionCapabilities(
         id,
         name,
         Context.ConnectionId,
@@ -109,17 +116,16 @@ namespace MiddleMan.Web.Hubs
       var name = Context.User!.Name();
       await ConnectionChecks(id, name);
 
-      var sameServerInvocations = await webSocketClientInvocationSessionService.ExistsSession(correlation);
-      await communicationManager.RegisterSessionReaderChannelAsync(channelReader, correlation, sameServerInvocations);
+      var sameServerInvocation = intraServerCommunicationManager.ExistsRequestSession(correlation);
+      await communicationManager.RegisterSessionReaderChannelAsync(channelReader, correlation, sameServerInvocation);
 
-      if (!sameServerInvocations)
+      if (!sameServerInvocation)
       {
-        var intraServerCommunicationManager = new IntraServerCommunicationManager(webSocketClientInvocationSessionService);
-        var intraServerAdapter = new IntraServerSessionDataAdapter(webSocketClientInvocationSessionService, correlation, SessionDataTypes.Request);
+        await intraServerCommunicationManager.PingOtherServer(correlation);
 
         await Task.WhenAll(
-          communicationManager.WriteAsync(intraServerAdapter.Adapt(),correlation),
-          intraServerCommunicationManager.WriteAsync(communicationManager.ReadAsync(correlation), correlation, SessionDataTypes.Response)
+          communicationManager.WriteAsync(intraServerCommunicationManager.ReadRequestAsync(correlation), correlation),
+          intraServerCommunicationManager.WriteResponseAsync(communicationManager.ReadAsync(correlation), correlation)
         );
       }
     }
@@ -140,7 +146,7 @@ namespace MiddleMan.Web.Hubs
     // TO DO: Refactor this to a hub filter
     private async Task ConnectionChecks(string id, string name)
     {
-      var clientConectionExists = await webSocketClientConnectionsService.ExistsWebSocketClientConnection(id, name);
+      var clientConectionExists = webSocketClientConnectionsService.ExistsWebSocketClientConnection(id, name);
 
       if (!clientConectionExists)
       {

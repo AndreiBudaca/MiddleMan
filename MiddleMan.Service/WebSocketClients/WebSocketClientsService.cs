@@ -37,7 +37,8 @@ namespace MiddleMan.Service.WebSocketClients
 
       if (clientData == null) return null;
 
-      var isConnected = await webSocketClientConnectionsService.ExistsWebSocketClientConnection(identifier, name);
+      // TO DO - return only instance connected clients
+      var isConnected = false;
       return BuildDto(clientData, isConnected);
     }
 
@@ -55,7 +56,8 @@ namespace MiddleMan.Service.WebSocketClients
       var clients = new List<WebSocketClientDto>();
       foreach (var client in clientData)
       {
-        var isConnected = await webSocketClientConnectionsService.ExistsWebSocketClientConnection(identifier, client.Name);
+        // TO DO - return only instance connected clients
+        var isConnected = false;;
         clients.Add(BuildDto(client, isConnected));
       }
 
@@ -86,7 +88,8 @@ namespace MiddleMan.Service.WebSocketClients
     public async Task DeleteWebSocketClient(string identifier, string name)
     {
       await clientRepository.DeleteAsync((identifier, name));
-      await webSocketClientConnectionsService.DeleteWebSocketClientConnection(identifier, name);
+      // TO DO
+      // await webSocketClientConnectionsService.DeleteWebSocketClientConnection(identifier, name);
     }
 
     public async Task<bool> IsValidWebSocketClientToken(string identifier, string name, string token)

@@ -1,25 +1,25 @@
 ﻿using MiddleMan.Data.InMemory;
-using MiddleMan.Web.Communication.Adapters;
-using MiddleMan.Web.Communication.SyncMechanisms;
+using MiddleMan.Communication.Adapters;
+using MiddleMan.Communication.SyncMechanisms;
 using System.Threading.Channels;
 
-namespace MiddleMan.Web.Communication
+namespace MiddleMan.Communication
 {
   public class StreamingCommunicationManager(IInMemoryContext context)
   {
     private readonly IInMemoryContext context = context;
 
-    private readonly AsyncResourceMonitor sessionReadMonitor = new();
-    private readonly AsyncResourceMonitor sessionReadEndedMonitor = new();
+    private static readonly AsyncResourceMonitor<Guid> sessionReadMonitor = new();
+    private static readonly AsyncResourceMonitor<Guid> sessionReadEndedMonitor = new();
 
-    private readonly AsyncResourceMonitor sessionWriteMonitor = new();
+    private static readonly AsyncResourceMonitor<Guid> sessionWriteMonitor = new();
 
     public async Task RegisterSessionReaderChannelAsync(ChannelReader<byte[]> channelReader,
      Guid correlation, bool waitForReadToFinish = true)
     {
       await sessionReadMonitor.SetResourceAndNotify
       (
-        async () => await context.AddToHash("readers", correlation.ToString(), channelReader),
+        async () => context.AddToHash("readers", correlation.ToString(), channelReader),
         correlation
       );
 
@@ -27,7 +27,7 @@ namespace MiddleMan.Web.Communication
       {
         _ = await sessionReadEndedMonitor.WaitToGetResource
         (
-          async () => await context.GetFromHash<ChannelReader<byte[]>>("readers", correlation.ToString()),
+          async () => context.GetFromHash<ChannelReader<byte[]>>("readers", correlation.ToString()),
           (reader) => reader == null,
           correlation
         );
@@ -38,7 +38,7 @@ namespace MiddleMan.Web.Communication
     {
       await sessionWriteMonitor.SetResourceAndNotify
       (
-        async () => await context.AddToHash("writers", correlation.ToString(), channelWriter),
+        async () => context.AddToHash("writers", correlation.ToString(), channelWriter),
         correlation
       );
     }
@@ -52,7 +52,7 @@ namespace MiddleMan.Web.Communication
     {
       var writer = await sessionWriteMonitor.WaitToGetResource
       (
-        async () => await context.GetFromHash<ChannelWriter<byte[]>>("writers", correlation.ToString()),
+        async () => context.GetFromHash<ChannelWriter<byte[]>>("writers", correlation.ToString()),
         (writer) => writer != null,
         correlation
       );
@@ -69,14 +69,14 @@ namespace MiddleMan.Web.Communication
         writer.Complete();
       }
 
-      await context.RemoveFromHash("writers", correlation.ToString());
+      context.RemoveFromHash("writers", correlation.ToString());
     }
 
     public async IAsyncEnumerable<byte[]> ReadAsync(Guid correlation)
     {
       var reader = await sessionReadMonitor.WaitToGetResource
       (
-        async () => await context.GetFromHash<ChannelReader<byte[]>>("readers", correlation.ToString()),
+        async () => context.GetFromHash<ChannelReader<byte[]>>("readers", correlation.ToString()),
         (reader) => reader != null,
         correlation
       );
@@ -95,7 +95,7 @@ namespace MiddleMan.Web.Communication
 
       await sessionReadEndedMonitor.SetResourceAndNotify
       (
-        async () => await context.RemoveFromHash("readers", correlation.ToString()),
+        async () => context.RemoveFromHash("readers", correlation.ToString()),
         correlation
       );
     }

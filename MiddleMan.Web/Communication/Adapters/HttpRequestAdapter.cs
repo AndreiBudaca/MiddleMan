@@ -1,5 +1,6 @@
 ﻿using MiddleMan.Core;
 using MiddleMan.Web.Communication.Metadata;
+using MiddleMan.Communication.Adapters; 
 
 namespace MiddleMan.Web.Communication.Adapters
 {

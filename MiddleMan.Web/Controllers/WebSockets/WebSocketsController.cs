@@ -1,11 +1,11 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using MiddleMan.Communication;
+using MiddleMan.Communication.Adapters;
 using MiddleMan.Core;
 using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
-using MiddleMan.Service.WebSocketClientInvocationSession;
-using MiddleMan.Service.WebSocketClientInvocationSession.Enums;
 using MiddleMan.Web.Communication;
 using MiddleMan.Web.Communication.Adapters;
 using MiddleMan.Web.Communication.Metadata;
@@ -21,14 +21,16 @@ namespace MiddleMan.Web.Controllers.WebSockets
   [DisableFormValueModelBinding]
   public class WebSocketsController(
     IHubContext<PlaygroundHub> hubContext,
-    StreamingCommunicationManager communicationManager,
-    IWebSocketClientConnectionsService webSocketClientConnectionsService,
-    IWebSocketClientInvocationSessionService clientInvocationSessionService) : Controller
+    StreamingCommunicationManager streamingCommunicationManager,
+    IntraServerCommunicationManager intraServerCommunicationManager,
+    ClientInfoCommunicationManager clientInfoCommunicationManager,
+    IWebSocketClientConnectionsService webSocketClientConnectionsService) : Controller
   {
     private readonly IHubContext<PlaygroundHub> hubContext = hubContext;
     private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
-    private readonly StreamingCommunicationManager communicationManager = communicationManager;
-    private readonly IWebSocketClientInvocationSessionService clientInvocationSessionService = clientInvocationSessionService;
+    private readonly StreamingCommunicationManager streamingCommunicationManager = streamingCommunicationManager;
+    private readonly ClientInfoCommunicationManager clientInfoCommunicationManager = clientInfoCommunicationManager;
+    private readonly IntraServerCommunicationManager intraServerCommunicationManager = intraServerCommunicationManager;
 
     [RequestSizeLimit(1_000_000_000)]
     [Route("{webSocketClientName}/{method}/{*rest}")]
@@ -46,28 +48,35 @@ namespace MiddleMan.Web.Controllers.WebSockets
         return;
       }
 
-      var webSocketClientConnection = await webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), webSocketClientName);
-      if (webSocketClientConnection == null || string.IsNullOrWhiteSpace(webSocketClientConnection.ConnectionId))
+      var onInstanceClientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), webSocketClientName);
+      var externalClientConnection = onInstanceClientConnection == null ? clientInfoCommunicationManager.QueryClientConnection(User.Identifier(), webSocketClientName).Result : null;
+
+      var connectionExists = onInstanceClientConnection != null || externalClientConnection != null;
+      var connectionIsValid = !string.IsNullOrWhiteSpace(onInstanceClientConnection?.ConnectionId) || !string.IsNullOrWhiteSpace(externalClientConnection?.ConnectionId);
+
+      if (!connectionExists || !connectionIsValid)
       {
         await new StatusResult(StatusCodes.Status404NotFound).ApplyResultAsync(HttpContext);
         return;
       }
 
-      var hubClient = hubContext.Clients.Client(webSocketClientConnection.ConnectionId);
+      var connectionId = onInstanceClientConnection?.ConnectionId ?? externalClientConnection!.ConnectionId!; 
+      var hubClient = hubContext.Clients.Client(connectionId);
       if (hubClient == null)
       {
-        await webSocketClientConnectionsService.DeleteWebSocketClientConnection(User.Identifier(), webSocketClientName, webSocketClientConnection.ConnectionId);
+        webSocketClientConnectionsService.DeleteWebSocketClientConnection(User.Identifier(), webSocketClientName, connectionId);
         await new StatusResult(StatusCodes.Status404NotFound).ApplyResultAsync(HttpContext);
         return;
       }
 
-      if (webSocketClientConnection.ClientCapabilities.SupportsStreaming)
+      var capabilities = onInstanceClientConnection?.ClientCapabilities ?? externalClientConnection?.ClientCapabilities ?? new ClientCapabilities();
+      if (capabilities.SupportsStreaming)
       {
-        await StreamInvocation(method, webSocketClientConnection, hubClient, cancellationToken);
+        await StreamInvocation(method, onInstanceClientConnection ?? externalClientConnection!, onInstanceClientConnection != null, hubClient, cancellationToken);
       }
       else
       {
-        await DirectInvocation(method, webSocketClientConnection, hubClient, cancellationToken);
+        await DirectInvocation(method, onInstanceClientConnection ?? externalClientConnection!, hubClient, cancellationToken);
       }
     }
 
@@ -89,12 +98,10 @@ namespace MiddleMan.Web.Controllers.WebSockets
       await new MiddleManClientDirectInvocationResult(response, cancellationToken).ApplyResultAsync(HttpContext);
     }
 
-    private async Task StreamInvocation(string method, ClientConnection webSocketClientConnection,
+    private async Task StreamInvocation(string method, ClientConnection webSocketClientConnection, bool isSameServerConnection,
      ISingleClientProxy hubClient, CancellationToken cancellationToken)
     {
       var correlation = Guid.NewGuid();
-
-      await hubClient.SendAsync(method, correlation, cancellationToken);
 
       var adapter = new HttpRequestAdapter(HttpContext.Request, new HttpUser
       {
@@ -103,41 +110,51 @@ namespace MiddleMan.Web.Controllers.WebSockets
 
       try
       {
-        await clientInvocationSessionService.RegisterSession(correlation);
+        await intraServerCommunicationManager.RegisterRequestSession(correlation);
 
-        if (webSocketClientConnection.IsConnectedToCurrentServer)
+        if (isSameServerConnection)
         {
-          await SameServerStreamInvocation(correlation, adapter, cancellationToken);
+          await SameServerStreamInvocation(correlation, adapter, hubClient, method, cancellationToken);
         }
         else
         {
-          await IntraServerStreamInvocation(correlation, adapter, cancellationToken);
+          await IntraServerStreamInvocation(correlation, adapter, hubClient, method, cancellationToken);
         }
       }
       finally
       {
-        await clientInvocationSessionService.ClearSession(correlation);
+        await intraServerCommunicationManager.ClearRequestSession(correlation);
       }
     }
 
-    private async Task SameServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter,
-      CancellationToken cancellationToken)
+    private async Task SameServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, ISingleClientProxy hubClient,
+      string method, CancellationToken cancellationToken)
     {
+      await hubClient.SendAsync(method, correlation, cancellationToken);
+
       await Task.WhenAll(
-        communicationManager.WriteAsync(adapter, correlation),
-        new MiddleManClientStreamingResult(communicationManager.ReadAsync(correlation), cancellationToken).ApplyResultAsync(HttpContext)
+        streamingCommunicationManager.WriteAsync(adapter, correlation),
+        new MiddleManClientStreamingResult(streamingCommunicationManager.ReadAsync(correlation), cancellationToken).ApplyResultAsync(HttpContext)
       );
     }
 
-    private async Task IntraServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter,
-     CancellationToken cancellationToken)
+    private async Task IntraServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, ISingleClientProxy hubClient,
+      string method, CancellationToken cancellationToken)
     {
-      var intraServerCommunicationManager = new IntraServerCommunicationManager(clientInvocationSessionService);
-      var responseDataSource = new IntraServerSessionDataAdapter(clientInvocationSessionService, correlation, SessionDataTypes.Response).Adapt();
+      var pinkTask = await intraServerCommunicationManager.WaitForOtherServer(correlation);
+      await hubClient.SendAsync(method, correlation, cancellationToken);
+
+      var ping = await pinkTask;
+      if (ping != correlation.ToString())
+      {
+        await new StatusResult(StatusCodes.Status504GatewayTimeout).ApplyResultAsync(HttpContext);
+        return;
+      }
 
       await Task.WhenAll(
-        intraServerCommunicationManager.WriteAsync(adapter, correlation, SessionDataTypes.Request),
-        new MiddleManClientStreamingResult(responseDataSource, cancellationToken).ApplyResultAsync(HttpContext)
+        intraServerCommunicationManager.WriteRequestAsync(adapter, correlation),
+        new MiddleManClientStreamingResult(intraServerCommunicationManager.ReadResponseAsync(correlation), cancellationToken)
+          .ApplyResultAsync(HttpContext)
       );
     }
   }

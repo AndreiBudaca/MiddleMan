@@ -1,13 +1,13 @@
 ﻿using Nito.AsyncEx;
 
-namespace MiddleMan.Web.Communication.SyncMechanisms
+namespace MiddleMan.Communication.SyncMechanisms
 {
-  public class AsyncResourceMonitor
+  public class AsyncResourceMonitor<T> where T : notnull
   {
-    private readonly Dictionary<Guid, AsyncMonitor?> monitors = [];
+    private readonly Dictionary<T, AsyncMonitor?> monitors = [];
     private readonly object globalLock = new();
 
-    private AsyncMonitor Get(Guid session)
+    private AsyncMonitor Get(T session)
     {
       _ = monitors.TryGetValue(session, out var result);
       if (result != null) return result;
@@ -24,7 +24,7 @@ namespace MiddleMan.Web.Communication.SyncMechanisms
       return result;
     }
 
-    private void Discard(Guid session)
+    private void Discard(T session)
     {
       lock (globalLock)
       {
@@ -32,7 +32,7 @@ namespace MiddleMan.Web.Communication.SyncMechanisms
       }
     }
     
-    public async Task<T> WaitToGetResource<T>(Func<Task<T>> getterFunc, Func<T, bool> resourceCondition, Guid session)
+    public async Task<K> WaitToGetResource<K>(Func<Task<K>> getterFunc, Func<K, bool> resourceCondition, T session)
     {
       var resource = await getterFunc.Invoke();
       if (!resourceCondition.Invoke(resource))
@@ -52,7 +52,7 @@ namespace MiddleMan.Web.Communication.SyncMechanisms
       return resource;
     }
 
-    public async Task SetResourceAndNotify(Func<Task> setterFunc, Guid session)
+    public async Task SetResourceAndNotify(Func<Task> setterFunc, T session)
     {
       var monitor = Get(session);
       using var leaveMonitorDisposable = await monitor.EnterAsync();
