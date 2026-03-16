@@ -18,14 +18,14 @@ namespace MiddleMan.Service.WebSocketClientMethods
     {
       var client = await _clientRepository.GetByIdAsync((identifier, name)) ?? throw new InvalidOperationException($"Client {identifier}:{name} not found.");
 
-      var metadataBytes = await methodChunks.EnumerateUntil(35, 0, cancellationToken);
+      var enumerationResult = await methodChunks.EnumerateUntil(35, 0, cancellationToken);
 
-      var metadata = GetMetadata(metadataBytes.Received);
+      var metadata = GetMetadata(enumerationResult.Received);
       if (!ServerCapabilities.AllowedVersions.Contains(metadata.Version)) throw new NotSupportedException($"Version {metadata.Version} is not supported.");
       if (metadata.Operation == MethodPackConstants.Operations.OK) return;
 
       var newFileInfo = await _blobService.UploadBlob(ServerCapabilities.StaticFilesPath, $"websocket-client-methods{Path.DirectorySeparatorChar}{identifier}_{name}_methods_{Guid.NewGuid()}.bin",
-        methodChunks.PrependItems(cancellationToken, metadataBytes.Received, metadataBytes.CurrentEnumerationItem), cancellationToken);
+        enumerationResult.Next, cancellationToken);
 
       if (client?.MethodInfoUrl is not null)
       {

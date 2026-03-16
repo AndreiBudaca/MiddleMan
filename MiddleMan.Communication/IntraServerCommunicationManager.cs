@@ -44,9 +44,9 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
     return WriteRequestAsync(dataWriterAdapter.Adapt(), correlation);
   }
 
-  public async Task WriteRequestAsync(IAsyncEnumerable<byte[]> dataSource, Guid correlation)
+  public Task WriteRequestAsync(IAsyncEnumerable<byte[]> dataSource, Guid correlation)
   {
-    await WriteAsync(dataSource, RequestChannelChunksKey(correlation));
+    return WriteAsync(dataSource, RequestChannelChunksKey(correlation));
   }
 
   public Task WriteResponseAsync(IDataWriterAdapter dataWriterAdapter, Guid correlation)
@@ -54,63 +54,40 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
     return WriteResponseAsync(dataWriterAdapter.Adapt(), correlation);
   }
 
-  public async Task WriteResponseAsync(IAsyncEnumerable<byte[]> dataSource, Guid correlation)
+  public Task WriteResponseAsync(IAsyncEnumerable<byte[]> dataSource, Guid correlation)
   {
-    await WriteAsync(dataSource, ResponseChannelChunksKey(correlation));
+    return WriteAsync(dataSource, ResponseChannelChunksKey(correlation));
   }
 
-  public IAsyncEnumerable<byte[]> ReadRequestAsync(Guid correlation)
+  public async IAsyncEnumerable<byte[]> ReadRequestAsync(Guid correlation)
   {
-    return ReadAsync(RequestChannelChunksKey(correlation));
+    await foreach (var chunk in ReadAsync(RequestChannelChunksKey(correlation)))
+    {
+      yield return chunk;
+    }
   }
 
-  public IAsyncEnumerable<byte[]> ReadResponseAsync(Guid correlation)
+  public async IAsyncEnumerable<byte[]> ReadResponseAsync(Guid correlation)
   {
-    return ReadAsync(ResponseChannelChunksKey(correlation));
+    await foreach (var chunk in ReadAsync(ResponseChannelChunksKey(correlation)))
+    {
+      yield return chunk;
+    }
   }
 
   private async Task WriteAsync(IAsyncEnumerable<byte[]> dataSource, string topic)
   {
     await foreach (var chunk in dataSource)
     {
-      await communicationChannel.PublishAsync(topic, chunk);
+      await communicationChannel.AddToStreamAsync(topic, chunk);
     }
 
-    await communicationChannel.PublishAsync(topic, []);
+    await communicationChannel.AddToStreamAsync(topic, []);
   }
 
   private async IAsyncEnumerable<byte[]> ReadAsync(string topic)
   {
-    var chunkChannel = Channel.CreateBounded<byte[]>(
-      new BoundedChannelOptions(ServerCapabilities.IntraServerBufferedChunks)
-      {
-        SingleReader = true,
-        SingleWriter = false,
-      }
-    );
-
-    var semaphore = new SemaphoreSlim(1, 1);
-
-    await communicationChannel.SubscribeAsync(topic, async (chunk) =>
-    {
-      await semaphore.WaitAsync();
-      try
-      {
-        if (chunk == null || chunk.Length == 0)
-        {
-          chunkChannel.Writer.Complete();
-          return;
-        }
-
-        await chunkChannel.Writer.WriteAsync(chunk);
-      }
-      finally
-      {
-        semaphore.Release();
-      }
-    });
-
-    await foreach (var chunk in chunkChannel.Reader.ReadAllAsync())
+    await foreach (var chunk in communicationChannel.ConsumeStreamAsync(topic, CancellationToken.None))
     {
       yield return chunk;
     }

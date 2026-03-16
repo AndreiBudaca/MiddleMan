@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using MiddleMan.Communication.SyncMechanisms;
 using MiddleMan.Core;
 using MiddleMan.Data.InMemory;
@@ -8,11 +9,14 @@ namespace MiddleMan.Communication.Channels
   public class RedisCommunicationChannel : ICommunicationChannel
   {
     private readonly ISubscriber subscriber;
+    private readonly IDatabase database;
     private readonly AsyncResourceMonitor<Guid> eventsMonitor = new();
     private readonly IInMemoryContext context;
+    private readonly string connectionString;
 
     public RedisCommunicationChannel(string connectionString, IInMemoryContext context)
     {
+      this.connectionString = connectionString;
       this.context = context;
       var redis = ConnectionMultiplexer.Connect(new ConfigurationOptions
       {
@@ -22,6 +26,7 @@ namespace MiddleMan.Communication.Channels
       });
 
       subscriber = redis.GetSubscriber();
+      database = redis.GetDatabase();
     }
 
     public Task PublishAsync<T>(string topic, T message)
@@ -73,6 +78,81 @@ namespace MiddleMan.Communication.Channels
     {
       return subscriber.UnsubscribeAsync(RedisChannel.Literal(topic));
     }
+
+    #region "STREAMS"
+    public Task AddToStreamAsync(string streamKey, byte[] data)
+    {
+      return database.StreamAddAsync(streamKey, "data", data);
+    }
+
+    public async IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+      using var blockingConnection = await ConnectionMultiplexer.ConnectAsync(new ConfigurationOptions
+      {
+        EndPoints = { connectionString },
+        AsyncTimeout = ServerCapabilities.GlobalTimeoutSeconds * 1000,
+        SyncTimeout = ServerCapabilities.GlobalTimeoutSeconds * 1000,
+      });
+
+      var db = blockingConnection.GetDatabase();
+      var lastId = "0-0";
+      var communicationEnded = false;
+
+      while (!cancellationToken.IsCancellationRequested && !communicationEnded)
+      {
+        RedisResult result;
+        try
+        {
+          result = await db.ExecuteAsync("XREAD", "BLOCK", ServerCapabilities.GlobalTimeoutSeconds * 1000, "COUNT", ServerCapabilities.IntraServerBufferedChunks, "STREAMS", streamKey, lastId);
+        }
+        catch (Exception) when (cancellationToken.IsCancellationRequested)
+        {
+          break;
+        }
+
+        if (result.IsNull) continue;
+
+        var idsToDelete = new List<RedisValue>();
+
+        var streamsArray = (RedisResult[])result!;
+
+        foreach (var streamResult in streamsArray!)
+        {
+          var streamData = (RedisResult[])streamResult!;
+          var messages = (RedisResult[])streamData![1]!;
+
+          foreach (var message in messages!)
+          {
+            var messageParts = (RedisResult[])message!;
+            var messageId = (string)messageParts![0]!;
+            var fields = (RedisResult[])messageParts[1]!;
+            var data = (byte[])fields![1]!;
+
+            idsToDelete.Add(messageId);
+            lastId = messageId;
+
+            if (data.Length > 0)
+            {
+              Console.WriteLine($"Received chunk with length {data.Length} on stream '{streamKey}' with message ID '{messageId}'");
+              yield return data;
+            }
+            else
+            {
+              communicationEnded = true;
+              break;
+            }
+          }
+        }
+
+        if (idsToDelete.Count > 0)
+        {
+          await database.StreamDeleteAsync(streamKey, [.. idsToDelete]);
+        }
+      }
+
+      await database.KeyDeleteAsync(streamKey);
+    }
+    #endregion
 
     private static RedisValue SerializeMessage<T>(T message)
     {

@@ -1,5 +1,3 @@
-using System.Threading.Channels;
-
 namespace MiddleMan.Communication.Channels
 {
   public interface ICommunicationChannel
@@ -16,6 +14,12 @@ namespace MiddleMan.Communication.Channels
     public Task PublishAsync<T>(string topic, T message);
     
     public Task PublishAsync(string topic, byte[] message);
+    #endregion
+
+    #region "STREAMS"
+    public Task AddToStreamAsync(string streamKey, byte[] data);
+
+    public IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, CancellationToken cancellationToken);
     #endregion
   }
 }
