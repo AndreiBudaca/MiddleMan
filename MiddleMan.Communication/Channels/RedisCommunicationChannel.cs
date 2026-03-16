@@ -60,7 +60,7 @@ namespace MiddleMan.Communication.Channels
       });
     }
 
-    public async Task<Task<T?>> SubscribeAndPeekChannelAsync<T>(string topic)
+    public async Task<Task<T?>> PeekChannelAsync<T>(string topic)
     {
       var correlation = Guid.NewGuid();
 
@@ -71,7 +71,15 @@ namespace MiddleMan.Communication.Channels
         await eventsMonitor.SetResourceAndNotify(async () => context.AddToHash("channelMessages", correlation.ToString(), deserializedMessage), correlation);
       });
 
-      return eventsMonitor.WaitToGetResource(async () => context.GetFromHash<T>("channelMessages", correlation.ToString()), (message) => message != null, correlation);
+      return eventsMonitor.WaitToGetResource(async () => context.GetFromHash<T>("channelMessages", correlation.ToString()), (message) => message != null, correlation)
+        .ContinueWith(async (messageTask) =>
+        {
+          var message = await messageTask;
+          await subscriber.UnsubscribeAsync(RedisChannel.Literal(topic));
+          context.RemoveFromHash("channelMessages", correlation.ToString());
+          
+          return message;
+        }).Unwrap();
     }
 
     public Task UnsubscribeAsync(string topic)

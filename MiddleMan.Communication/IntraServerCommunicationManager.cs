@@ -31,7 +31,7 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
 
   public Task<Task<string?>> WaitForOtherServer(Guid correlation)
   {
-    return communicationChannel.SubscribeAndPeekChannelAsync<string>(PingKey(correlation));
+    return communicationChannel.PeekChannelAsync<string>(PingKey(correlation));
   }
 
   public Task PingOtherServer(Guid correlation)

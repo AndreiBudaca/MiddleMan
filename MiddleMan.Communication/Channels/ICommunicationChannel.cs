@@ -7,7 +7,7 @@ namespace MiddleMan.Communication.Channels
 
     public Task SubscribeAsync(string topic, Func<byte[], Task> onMessageReceived);
 
-    public Task<Task<T?>> SubscribeAndPeekChannelAsync<T>(string topic);
+    public Task<Task<T?>> PeekChannelAsync<T>(string topic);
 
     public Task UnsubscribeAsync(string topic);
 
