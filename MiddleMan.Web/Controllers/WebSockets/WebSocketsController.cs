@@ -141,21 +141,13 @@ namespace MiddleMan.Web.Controllers.WebSockets
     private async Task IntraServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, ISingleClientProxy hubClient,
       string method, CancellationToken cancellationToken)
     {
-      var pingTask = await intraServerCommunicationManager.WaitForOtherServer(correlation);
-
       await hubClient.SendAsync(method, correlation, cancellationToken);
-
-      var ping = await pingTask;
-      if (ping != correlation.ToString())
-      {
-        await new StatusResult(StatusCodes.Status504GatewayTimeout).ApplyResultAsync(HttpContext);
-        return;
-      }
 
       await Task.WhenAll(
         intraServerCommunicationManager.WriteRequestAsync(adapter, correlation),
-        new MiddleManClientStreamingResult(intraServerCommunicationManager.ReadResponseAsync(correlation), cancellationToken)
-          .ApplyResultAsync(HttpContext)
+        new MiddleManClientStreamingResult(
+          intraServerCommunicationManager.ReadResponseAsync(correlation), cancellationToken)
+        .ApplyResultAsync(HttpContext)
       );
     }
   }

@@ -124,7 +124,6 @@ namespace MiddleMan.Web.Hubs
         try
         {
           await intraServerCommunicationManager.RegisterResponseSession(correlation, false);
-          await intraServerCommunicationManager.PingOtherServer(correlation);
 
           await Task.WhenAll(
             communicationManager.WriteAsync(intraServerCommunicationManager.ReadRequestAsync(correlation), correlation),
