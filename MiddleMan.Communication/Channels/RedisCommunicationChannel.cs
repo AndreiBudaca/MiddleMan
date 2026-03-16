@@ -55,7 +55,6 @@ namespace MiddleMan.Communication.Channels
       return subscriber.SubscribeAsync(RedisChannel.Literal(topic), async (channel, message) =>
       {
         var rawBytes = AsRawBytes(message);
-        Console.WriteLine($"Received raw bytes message on topic '{topic}' with length {rawBytes.Length}");
         await onMessageReceived(rawBytes);
       });
     }
@@ -141,7 +140,6 @@ namespace MiddleMan.Communication.Channels
 
             if (data.Length > 0)
             {
-              Console.WriteLine($"Received chunk with length {data.Length} on stream '{streamKey}' with message ID '{messageId}'");
               yield return data;
             }
             else

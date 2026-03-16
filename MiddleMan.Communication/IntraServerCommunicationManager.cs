@@ -1,4 +1,3 @@
-using System.Threading.Channels;
 using MiddleMan.Communication.Adapters;
 using MiddleMan.Communication.Channels;
 using MiddleMan.Communication.SyncMechanisms;
@@ -13,15 +12,40 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
   private readonly ICommunicationChannel communicationChannel = communicationChannel;
   private readonly IInMemoryContext inMemoryContext = inMemoryContext;
 
-
-  public async Task RegisterRequestSession(Guid correlation)
+  public async Task RegisterRequestSession(Guid correlation, bool sameServer)
   {
     inMemoryContext.AddToHash("intraServerRequestSessions", correlation.ToString(), true);
+
+    if (!sameServer)
+    {
+      await RegisterTokens(RequestChannelTokenKey(correlation), correlation);
+    }
   }
 
-  public async Task ClearRequestSession(Guid correlation)
+  public async Task RegisterResponseSession(Guid correlation, bool sameServer)
+  {
+    if (!sameServer)
+    {
+      await RegisterTokens(ResponseChannelTokenKey(correlation), correlation);
+    }
+  }
+
+  public async Task ClearRequestSession(Guid correlation, bool sameServer)
   {
     inMemoryContext.RemoveFromHash("intraServerRequestSessions", correlation.ToString());
+
+    if (!sameServer)
+    {
+      inMemoryContext.RemoveList(RequestChannelTokenKey(correlation));
+    }
+  }
+
+  public async Task ClearResponseSession(Guid correlation, bool sameServer)
+  {
+    if (!sameServer)
+    {
+      inMemoryContext.RemoveList(ResponseChannelTokenKey(correlation));
+    }
   }
 
   public bool ExistsRequestSession(Guid correlation)
@@ -46,7 +70,7 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
 
   public Task WriteRequestAsync(IAsyncEnumerable<byte[]> dataSource, Guid correlation)
   {
-    return WriteAsync(dataSource, RequestChannelChunksKey(correlation));
+    return WriteAsync(dataSource, RequestChannelChunksKey(correlation), RequestChannelTokenKey(correlation), correlation);
   }
 
   public Task WriteResponseAsync(IDataWriterAdapter dataWriterAdapter, Guid correlation)
@@ -56,44 +80,58 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
 
   public Task WriteResponseAsync(IAsyncEnumerable<byte[]> dataSource, Guid correlation)
   {
-    return WriteAsync(dataSource, ResponseChannelChunksKey(correlation));
+    return WriteAsync(dataSource, ResponseChannelChunksKey(correlation), ResponseChannelTokenKey(correlation), correlation);
   }
 
-  public async IAsyncEnumerable<byte[]> ReadRequestAsync(Guid correlation)
+  public IAsyncEnumerable<byte[]> ReadRequestAsync(Guid correlation)
   {
-    await foreach (var chunk in ReadAsync(RequestChannelChunksKey(correlation)))
-    {
-      yield return chunk;
-    }
+    return ReadAsync(RequestChannelChunksKey(correlation), RequestChannelTokenKey(correlation));
   }
 
-  public async IAsyncEnumerable<byte[]> ReadResponseAsync(Guid correlation)
+  public IAsyncEnumerable<byte[]> ReadResponseAsync(Guid correlation)
   {
-    await foreach (var chunk in ReadAsync(ResponseChannelChunksKey(correlation)))
-    {
-      yield return chunk;
-    }
+    return ReadAsync(ResponseChannelChunksKey(correlation), ResponseChannelTokenKey(correlation));
   }
 
-  private async Task WriteAsync(IAsyncEnumerable<byte[]> dataSource, string topic)
+  private async Task RegisterTokens(string tokensKey, Guid correlation)
+  {
+    inMemoryContext.AddToList(tokensKey, Enumerable.Repeat(1, ServerCapabilities.IntraServerBufferedChunks));
+
+    await communicationChannel.SubscribeAsync<int>(tokensKey,
+      async (message) =>
+      {
+        await sessionMonitors.SetResourceAndNotify(async () => inMemoryContext.AddToList(tokensKey, 1), correlation);
+      }
+    );
+  }
+
+  private async Task WriteAsync(IAsyncEnumerable<byte[]> dataSource, string topic, string tokensKey, Guid correlation)
   {
     await foreach (var chunk in dataSource)
     {
+      var _ = await sessionMonitors.WaitToGetResource(
+        async () => inMemoryContext.PopList<int>(tokensKey),
+        (token) => token > 0,
+        correlation);
+
       await communicationChannel.AddToStreamAsync(topic, chunk);
     }
 
     await communicationChannel.AddToStreamAsync(topic, []);
   }
 
-  private async IAsyncEnumerable<byte[]> ReadAsync(string topic)
+  private async IAsyncEnumerable<byte[]> ReadAsync(string topic, string tokensKey)
   {
     await foreach (var chunk in communicationChannel.ConsumeStreamAsync(topic, CancellationToken.None))
     {
+      await communicationChannel.PublishAsync(tokensKey, 1);
       yield return chunk;
     }
   }
 
   private static string RequestChannelChunksKey(Guid correlation) => $"intra-server-request:chunks:{correlation}";
   private static string ResponseChannelChunksKey(Guid correlation) => $"intra-server-response:chunks:{correlation}";
+  private static string RequestChannelTokenKey(Guid correlation) => $"intra-server-request:token:{correlation}";
+  private static string ResponseChannelTokenKey(Guid correlation) => $"intra-server-response:token:{correlation}";
   private static string PingKey(Guid correlation) => $"intra-server-ping:{correlation}";
 }

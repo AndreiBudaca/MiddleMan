@@ -110,7 +110,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
 
       try
       {
-        await intraServerCommunicationManager.RegisterRequestSession(correlation);
+        await intraServerCommunicationManager.RegisterRequestSession(correlation, isSameServerConnection);
 
         if (isSameServerConnection)
         {
@@ -123,7 +123,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
       }
       finally
       {
-        await intraServerCommunicationManager.ClearRequestSession(correlation);
+        await intraServerCommunicationManager.ClearRequestSession(correlation, isSameServerConnection);
       }
     }
 

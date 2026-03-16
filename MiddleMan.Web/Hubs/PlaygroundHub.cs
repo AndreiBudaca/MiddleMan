@@ -53,7 +53,7 @@ namespace MiddleMan.Web.Hubs
       var id = Context.User!.Identifier();
       var name = Context.User!.Name();
 
-      var onServerConnectionCount =  webSocketClientConnectionsService.DeleteWebSocketClientConnection(id, name, Context.ConnectionId);
+      var onServerConnectionCount = webSocketClientConnectionsService.DeleteWebSocketClientConnection(id, name, Context.ConnectionId);
       if (onServerConnectionCount == 0)
       {
         await clientInfoCommunicationManager.StopListening(id, name);
@@ -121,12 +121,20 @@ namespace MiddleMan.Web.Hubs
 
       if (!sameServerInvocation)
       {
-        await intraServerCommunicationManager.PingOtherServer(correlation);
+        try
+        {
+          await intraServerCommunicationManager.RegisterResponseSession(correlation, false);
+          await intraServerCommunicationManager.PingOtherServer(correlation);
 
-        await Task.WhenAll(
-          communicationManager.WriteAsync(intraServerCommunicationManager.ReadRequestAsync(correlation), correlation),
-          intraServerCommunicationManager.WriteResponseAsync(communicationManager.ReadAsync(correlation), correlation)
-        );
+          await Task.WhenAll(
+            communicationManager.WriteAsync(intraServerCommunicationManager.ReadRequestAsync(correlation), correlation),
+            intraServerCommunicationManager.WriteResponseAsync(communicationManager.ReadAsync(correlation), correlation)
+          );
+        }
+        finally
+        {
+          await intraServerCommunicationManager.ClearResponseSession(correlation, false);
+        }
       }
     }
 
