@@ -8,6 +8,8 @@
 
     public const int GlobalTimeoutSeconds = 60;
 
+    public const int ClientConnectionTimeoutSeconds = 5;
+
     public static readonly int[] AllowedVersions = [0];
 
 

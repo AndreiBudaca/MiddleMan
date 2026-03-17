@@ -33,10 +33,10 @@ namespace MiddleMan.Communication
       await communicationChannel.UnsubscribeAsync(ClientInfoQueryChannelKey(identifier, name));
     }
 
-    public async Task<ClientConnection?> QueryClientConnection(string identifier, string name)
+    public async Task<ClientConnection?> QueryClientConnection(string identifier, string name, CancellationToken cancellationToken = default)
     {
       var queryKey = Guid.NewGuid().ToString();
-      var responseTask = await communicationChannel.PeekChannelAsync<ClientConnection>(ClientInfoConnectionResponseChannelKey(identifier, name, queryKey));
+      var responseTask = await communicationChannel.PeekChannelAsync<ClientConnection>(ClientInfoConnectionResponseChannelKey(identifier, name, queryKey), cancellationToken);
       await communicationChannel.PublishAsync(ClientInfoQueryChannelKey(identifier, name), new ClientQuery { Query = ClientInfoQueries.ConnectionId, RespondTo = queryKey });
       
       var response = await responseTask;

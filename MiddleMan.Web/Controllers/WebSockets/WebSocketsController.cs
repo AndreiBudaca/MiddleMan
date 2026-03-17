@@ -49,7 +49,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
       }
 
       var onInstanceClientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), webSocketClientName);
-      var externalClientConnection = onInstanceClientConnection == null ? clientInfoCommunicationManager.QueryClientConnection(User.Identifier(), webSocketClientName).Result : null;
+      var externalClientConnection = onInstanceClientConnection == null ? await GetExternalClientConnection(webSocketClientName) : null;
 
       var connectionExists = onInstanceClientConnection != null || externalClientConnection != null;
       var connectionIsValid = !string.IsNullOrWhiteSpace(onInstanceClientConnection?.ConnectionId) || !string.IsNullOrWhiteSpace(externalClientConnection?.ConnectionId);
@@ -149,6 +149,23 @@ namespace MiddleMan.Web.Controllers.WebSockets
           intraServerCommunicationManager.ReadResponseAsync(correlation), cancellationToken)
         .ApplyResultAsync(HttpContext)
       );
+    }
+
+    private async Task<ClientConnection?> GetExternalClientConnection(string webSocketClientName)
+    {
+      var cts = new CancellationTokenSource(TimeSpan.FromSeconds(ServerCapabilities.ClientConnectionTimeoutSeconds));
+      try
+      {
+        return await clientInfoCommunicationManager.QueryClientConnection(User.Identifier(), webSocketClientName, cts.Token);
+      }
+      catch (OperationCanceledException) when (cts.IsCancellationRequested)
+      {
+        return null;
+      }
+      finally
+      {
+        cts.Dispose();
+      }
     }
   }
 }

@@ -59,26 +59,30 @@ namespace MiddleMan.Communication.Channels
       });
     }
 
-    public async Task<Task<T?>> PeekChannelAsync<T>(string topic)
+    public async Task<Task<T?>> PeekChannelAsync<T>(string topic, CancellationToken cancellationToken = default)
     {
       var correlation = Guid.NewGuid();
 
       await subscriber.SubscribeAsync(RedisChannel.Literal(topic), async (channel, message) =>
       {
-        var deserializedMessage = DeserializeMessage<T>(message) ?? 
+        var deserializedMessage = DeserializeMessage<T>(message) ??
           throw new Exception($"Failed to deserialize message for topic '{topic}'");
         await eventsMonitor.SetResourceAndNotify(async () => context.AddToHash("channelMessages", correlation.ToString(), deserializedMessage), correlation);
       });
 
-      return eventsMonitor.WaitToGetResource(async () => context.GetFromHash<T>("channelMessages", correlation.ToString()), (message) => message != null, correlation)
+      return eventsMonitor.WaitToGetResource(async () => context.GetFromHash<T>("channelMessages", correlation.ToString()), (message) => message != null, correlation, cancellationToken)
         .ContinueWith(async (messageTask) =>
         {
-          var message = await messageTask;
-          await subscriber.UnsubscribeAsync(RedisChannel.Literal(topic));
-          context.RemoveFromHash("channelMessages", correlation.ToString());
-          
-          return message;
-        }).Unwrap();
+          try
+          {
+            return await messageTask;
+          }
+          finally
+          {
+            await subscriber.UnsubscribeAsync(RedisChannel.Literal(topic));
+            context.RemoveFromHash("channelMessages", correlation.ToString());
+          }
+        }, cancellationToken).Unwrap();
     }
 
     public Task UnsubscribeAsync(string topic)

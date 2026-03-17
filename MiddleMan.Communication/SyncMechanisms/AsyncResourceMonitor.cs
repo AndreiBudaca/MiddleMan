@@ -31,25 +31,30 @@ namespace MiddleMan.Communication.SyncMechanisms
         monitors.Remove(session);
       }
     }
-    
-    public async Task<K> WaitToGetResource<K>(Func<Task<K>> getterFunc, Func<K, bool> resourceCondition, T session)
-    {
-      var resource = await getterFunc.Invoke();
-      if (!resourceCondition.Invoke(resource))
-      {
-        var monitor = Get(session);
-        using var leaveMonitorDisposable = await monitor.EnterAsync();
 
-        resource = await getterFunc.Invoke();
+    public async Task<K> WaitToGetResource<K>(Func<Task<K>> getterFunc, Func<K, bool> resourceCondition, T session, CancellationToken cancellationToken = default)
+    {
+      try
+      {
+        var resource = await getterFunc.Invoke();
         if (!resourceCondition.Invoke(resource))
         {
-          await monitor.WaitAsync();
-          resource = await getterFunc.Invoke();
-        }
-      }
-      Discard(session);
+          var monitor = Get(session);
+          using var leaveMonitorDisposable = await monitor.EnterAsync(cancellationToken);
 
-      return resource;
+          resource = await getterFunc.Invoke();
+          if (!resourceCondition.Invoke(resource))
+          {
+            await monitor.WaitAsync(cancellationToken);
+            resource = await getterFunc.Invoke();
+          }
+        }
+        return resource;
+      }
+      finally
+      {
+        Discard(session);
+      }
     }
 
     public async Task SetResourceAndNotify(Func<Task> setterFunc, T session)
