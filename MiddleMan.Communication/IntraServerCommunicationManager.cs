@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using MiddleMan.Communication.Adapters;
 using MiddleMan.Communication.Channels;
 using MiddleMan.Communication.SyncMechanisms;
@@ -63,34 +64,34 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
     return communicationChannel.PublishAsync(PingKey(correlation), correlation.ToString());
   }
 
-  public Task WriteRequestAsync(IDataWriterAdapter dataWriterAdapter, Guid correlation)
+  public Task WriteRequestAsync(IDataWriterAdapter dataWriterAdapter, Guid correlation, CancellationToken cancellationToken = default)
   {
-    return WriteRequestAsync(dataWriterAdapter.Adapt(), correlation);
+    return WriteRequestAsync(dataWriterAdapter.Adapt(), correlation, cancellationToken);
   }
 
-  public Task WriteRequestAsync(IAsyncEnumerable<byte[]> dataSource, Guid correlation)
+  public Task WriteRequestAsync(IAsyncEnumerable<byte[]> dataSource, Guid correlation, CancellationToken cancellationToken = default)
   {
-    return WriteAsync(dataSource, RequestChannelChunksKey(correlation), RequestChannelTokenKey(correlation), correlation);
+    return WriteAsync(dataSource, RequestChannelChunksKey(correlation), RequestChannelTokenKey(correlation), correlation, cancellationToken);
   }
 
-  public Task WriteResponseAsync(IDataWriterAdapter dataWriterAdapter, Guid correlation)
+  public Task WriteResponseAsync(IDataWriterAdapter dataWriterAdapter, Guid correlation, CancellationToken cancellationToken = default)
   {
-    return WriteResponseAsync(dataWriterAdapter.Adapt(), correlation);
+    return WriteResponseAsync(dataWriterAdapter.Adapt(), correlation, cancellationToken);
   }
 
-  public Task WriteResponseAsync(IAsyncEnumerable<byte[]> dataSource, Guid correlation)
+  public Task WriteResponseAsync(IAsyncEnumerable<byte[]> dataSource, Guid correlation, CancellationToken cancellationToken = default)
   {
-    return WriteAsync(dataSource, ResponseChannelChunksKey(correlation), ResponseChannelTokenKey(correlation), correlation);
+    return WriteAsync(dataSource, ResponseChannelChunksKey(correlation), ResponseChannelTokenKey(correlation), correlation, cancellationToken);
   }
 
-  public IAsyncEnumerable<byte[]> ReadRequestAsync(Guid correlation)
+  public IAsyncEnumerable<byte[]> ReadRequestAsync(Guid correlation, CancellationToken cancellationToken = default)
   {
-    return ReadAsync(RequestChannelChunksKey(correlation), RequestChannelTokenKey(correlation));
+    return ReadAsync(RequestChannelChunksKey(correlation), RequestChannelTokenKey(correlation), cancellationToken);
   }
 
-  public IAsyncEnumerable<byte[]> ReadResponseAsync(Guid correlation)
+  public IAsyncEnumerable<byte[]> ReadResponseAsync(Guid correlation, CancellationToken cancellationToken = default)
   {
-    return ReadAsync(ResponseChannelChunksKey(correlation), ResponseChannelTokenKey(correlation));
+    return ReadAsync(ResponseChannelChunksKey(correlation), ResponseChannelTokenKey(correlation), cancellationToken);
   }
 
   private async Task RegisterTokens(string tokensKey, Guid correlation)
@@ -105,24 +106,30 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
     );
   }
 
-  private async Task WriteAsync(IAsyncEnumerable<byte[]> dataSource, string topic, string tokensKey, Guid correlation)
+  private async Task WriteAsync(IAsyncEnumerable<byte[]> dataSource, string topic, string tokensKey, Guid correlation, CancellationToken cancellationToken = default)
   {
-    await foreach (var chunk in dataSource)
+    try
     {
-      var _ = await sessionMonitors.WaitToGetResource(
-        async () => inMemoryContext.PopList<int>(tokensKey),
-        (token) => token > 0,
-        correlation);
+      await foreach (var chunk in dataSource.WithCancellation(cancellationToken))
+      {
+        var _ = await sessionMonitors.WaitToGetResource(
+          async () => inMemoryContext.PopList<int>(tokensKey),
+          (token) => token > 0,
+          correlation,
+          cancellationToken);
 
-      await communicationChannel.AddToStreamAsync(topic, chunk);
+        await communicationChannel.AddToStreamAsync(topic, chunk);
+      }
     }
-
-    await communicationChannel.AddToStreamAsync(topic, []);
+    finally
+    {
+      await communicationChannel.AddToStreamAsync(topic, []);
+    }
   }
 
-  private async IAsyncEnumerable<byte[]> ReadAsync(string topic, string tokensKey)
+  private async IAsyncEnumerable<byte[]> ReadAsync(string topic, string tokensKey, [EnumeratorCancellation] CancellationToken cancellationToken = default)
   {
-    await foreach (var chunk in communicationChannel.ConsumeStreamAsync(topic, CancellationToken.None))
+    await foreach (var chunk in communicationChannel.ConsumeStreamAsync(topic, cancellationToken))
     {
       await communicationChannel.PublishAsync(tokensKey, 1);
       yield return chunk;

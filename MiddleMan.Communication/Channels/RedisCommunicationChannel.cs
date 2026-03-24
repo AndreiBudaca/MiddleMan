@@ -91,9 +91,10 @@ namespace MiddleMan.Communication.Channels
     }
 
     #region "STREAMS"
-    public Task AddToStreamAsync(string streamKey, byte[] data)
+    public async Task AddToStreamAsync(string streamKey, byte[] data)
     {
-      return database.StreamAddAsync(streamKey, "data", data);
+      await database.StreamAddAsync(streamKey, "data", data);
+      await database.KeyExpireAsync(streamKey, TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds));
     }
 
     public async IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -120,6 +121,7 @@ namespace MiddleMan.Communication.Channels
         {
           break;
         }
+        catch { throw; }
 
         if (result.IsNull) continue;
 

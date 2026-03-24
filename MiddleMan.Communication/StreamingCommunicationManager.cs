@@ -59,14 +59,20 @@ namespace MiddleMan.Communication
 
       if (writer != null)
       {
-        await foreach (var chunk in dataSource)
+        try
         {
-          var buff = new byte[chunk.Length];
-          Buffer.BlockCopy(chunk, 0, buff, 0, chunk.Length);
+          await foreach (var chunk in dataSource)
+          {
+            var buff = new byte[chunk.Length];
+            Buffer.BlockCopy(chunk, 0, buff, 0, chunk.Length);
 
-          await writer.WriteAsync(buff);
+            await writer.WriteAsync(buff);
+          }
         }
-        writer.Complete();
+        finally
+        {
+          writer.Complete();
+        }
       }
 
       context.RemoveFromHash("writers", correlation.ToString());
