@@ -36,14 +36,14 @@ namespace MiddleMan.Web.Controllers.WebSockets
     [Route("{webSocketClientName}/{method}/{*rest}")]
     public async Task Send([FromRoute] string webSocketClientName, [FromRoute] string method, CancellationToken cancellationToken)
     {
-      if (string.IsNullOrWhiteSpace(webSocketClientName) || string.IsNullOrWhiteSpace(method)) 
-      { 
+      if (string.IsNullOrWhiteSpace(webSocketClientName) || string.IsNullOrWhiteSpace(method))
+      {
         await new StatusResult(StatusCodes.Status400BadRequest).ApplyResultAsync(HttpContext);
         return;
       }
 
       if (HttpContext.Request.ContentLength == null && HttpContext.Request.Method != HttpMethods.Get)
-      { 
+      {
         await new StatusResult(StatusCodes.Status411LengthRequired).ApplyResultAsync(HttpContext);
         return;
       }
@@ -60,7 +60,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
         return;
       }
 
-      var connectionId = onInstanceClientConnection?.ConnectionId ?? externalClientConnection!.ConnectionId!; 
+      var connectionId = onInstanceClientConnection?.ConnectionId ?? externalClientConnection!.ConnectionId!;
       var hubClient = hubContext.Clients.Client(connectionId);
       if (hubClient == null)
       {
@@ -111,14 +111,15 @@ namespace MiddleMan.Web.Controllers.WebSockets
       try
       {
         await intraServerCommunicationManager.RegisterRequestSession(correlation, isSameServerConnection);
+        await hubClient.SendAsync(method, correlation, cancellationToken);
 
         if (isSameServerConnection)
         {
-          await SameServerStreamInvocation(correlation, adapter, hubClient, method, cancellationToken);
+          await SameServerStreamInvocation(correlation, adapter, cancellationToken);
         }
         else
         {
-          await IntraServerStreamInvocation(correlation, adapter, hubClient, method, cancellationToken);
+          await IntraServerStreamInvocation(correlation, adapter, cancellationToken);
         }
       }
       finally
@@ -127,26 +128,20 @@ namespace MiddleMan.Web.Controllers.WebSockets
       }
     }
 
-    private async Task SameServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, ISingleClientProxy hubClient,
-      string method, CancellationToken cancellationToken)
+    private Task SameServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter,CancellationToken cancellationToken)
     {
-      await hubClient.SendAsync(method, correlation, cancellationToken);
-
-      await Task.WhenAll(
+      return Task.WhenAll(
         streamingCommunicationManager.WriteAsync(adapter, correlation),
         new MiddleManClientStreamingResult(streamingCommunicationManager.ReadAsync(correlation), cancellationToken).ApplyResultAsync(HttpContext)
       );
     }
 
-    private async Task IntraServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, ISingleClientProxy hubClient,
-      string method, CancellationToken cancellationToken)
+    private Task IntraServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, CancellationToken cancellationToken)
     {
-      await hubClient.SendAsync(method, correlation, cancellationToken);
-
-      await Task.WhenAll(
-        intraServerCommunicationManager.WriteRequestAsync(adapter, correlation),
+      return Task.WhenAll(
+        intraServerCommunicationManager.WriteRequestAsync(adapter, correlation, cancellationToken),
         new MiddleManClientStreamingResult(
-          intraServerCommunicationManager.ReadResponseAsync(correlation), cancellationToken)
+          intraServerCommunicationManager.ReadResponseAsync(correlation, cancellationToken), cancellationToken)
         .ApplyResultAsync(HttpContext)
       );
     }

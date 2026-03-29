@@ -91,13 +91,12 @@ namespace MiddleMan.Communication.Channels
     }
 
     #region "STREAMS"
-    public async Task AddToStreamAsync(string streamKey, byte[] data)
+    public Task AddToStreamAsync(string streamKey, byte[] data)
     {
-      await database.StreamAddAsync(streamKey, "data", data);
-      await database.KeyExpireAsync(streamKey, TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds));
+      return database.StreamAddAsync(streamKey, "data", data);
     }
 
-    public async IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, string heartbeatKey, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
       using var blockingConnection = await ConnectionMultiplexer.ConnectAsync(new ConfigurationOptions
       {
@@ -117,52 +116,59 @@ namespace MiddleMan.Communication.Channels
         {
           result = await db.ExecuteAsync("XREAD", "BLOCK", ServerCapabilities.GlobalTimeoutSeconds * 1000, "COUNT", ServerCapabilities.IntraServerBufferedChunks, "STREAMS", streamKey, lastId);
         }
-        catch (Exception) when (cancellationToken.IsCancellationRequested)
-        {
-          break;
-        }
         catch { throw; }
 
-        if (result.IsNull) continue;
-
-        var idsToDelete = new List<RedisValue>();
-
-        var streamsArray = (RedisResult[])result!;
-
-        foreach (var streamResult in streamsArray!)
+        if (result.IsNull)
         {
-          var streamData = (RedisResult[])streamResult!;
-          var messages = (RedisResult[])streamData![1]!;
-
-          foreach (var message in messages!)
+          if (!await HeartbeatExistsAsync(heartbeatKey))
           {
-            var messageParts = (RedisResult[])message!;
-            var messageId = (string)messageParts![0]!;
-            var fields = (RedisResult[])messageParts[1]!;
-            var data = (byte[])fields![1]!;
-
-            idsToDelete.Add(messageId);
-            lastId = messageId;
-
-            if (data.Length > 0)
-            {
-              yield return data;
-            }
-            else
-            {
-              communicationEnded = true;
-              break;
-            }
+            break;
           }
+          continue;
         }
+
+        var (idsToDelete, chunks) = HandleStreamResult((RedisResult[])result!);
 
         if (idsToDelete.Count > 0)
         {
           await database.StreamDeleteAsync(streamKey, [.. idsToDelete]);
         }
+
+        foreach (var data in chunks!)
+        {
+          if (data.Length > 0)
+          {
+            yield return data;
+          }
+          else
+          {
+            communicationEnded = true;
+            break;
+          }
+        }
+
+        if (!communicationEnded)
+        {
+          lastId = ((string)idsToDelete.Last())!;
+        }
       }
 
       await database.KeyDeleteAsync(streamKey);
+    }
+
+    public Task RefreshHeartbeatAsync(string heartbeatKey, TimeSpan ttl)
+    {
+      return database.StringSetAsync(heartbeatKey, "1", ttl);
+    }
+
+    public Task<bool> HeartbeatExistsAsync(string heartbeatKey)
+    {
+      return database.KeyExistsAsync(heartbeatKey);
+    }
+
+    public async Task DeleteKeyAsync(string key)
+    {
+      await database.KeyDeleteAsync(key);
     }
     #endregion
 
@@ -187,6 +193,31 @@ namespace MiddleMan.Communication.Channels
     {
       if (redisValue.IsNull) return [];
       return (byte[])redisValue!;
+    }
+
+    private static (List<RedisValue> toBeDeleted, IEnumerable<byte[]> chunks) HandleStreamResult(RedisResult[]? streamsArray)
+    {
+      var toBeDeleted = new List<RedisValue>();
+      var chunks = new List<byte[]>();
+
+      foreach (var streamResult in streamsArray!)
+      {
+        var streamData = (RedisResult[])streamResult!;
+        var messages = (RedisResult[])streamData![1]!;
+
+        foreach (var message in messages!)
+        {
+          var messageParts = (RedisResult[])message!;
+          var messageId = (string)messageParts![0]!;
+          var fields = (RedisResult[])messageParts[1]!;
+          var data = (byte[])fields![1]!;
+
+          toBeDeleted.Add(messageId);
+          chunks.Add(data);
+        }
+      }
+
+      return (toBeDeleted, chunks);
     }
   }
 }

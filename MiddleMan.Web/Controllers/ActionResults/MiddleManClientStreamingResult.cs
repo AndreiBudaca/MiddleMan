@@ -27,44 +27,50 @@ namespace MiddleMan.Web.Controllers.ActionResults
     {
       if (response == null) return;
 
-      var defaultResponseMetadata = new HttpResponseMetadata()
+      try
       {
-        Headers = new Dictionary<string, string?>()
+        var defaultResponseMetadata = new HttpResponseMetadata()
         {
-          ["Content-Type"] = "application/octet-stream",
-        },
-      };
+          Headers = new Dictionary<string, string?>()
+          {
+            ["Content-Type"] = "application/octet-stream",
+          },
+        };
 
-      var currentEnumeration = response;
+        var currentEnumeration = response;
 
-      var metadataLengthBytes = await currentEnumeration.EnumerateUntil(4, 0, cancellationToken);
-      currentEnumeration = metadataLengthBytes.Next;
+        var metadataLengthBytes = await currentEnumeration.EnumerateUntil(4, 0, cancellationToken);
+        currentEnumeration = metadataLengthBytes.Next;
 
-      var metadataLength = BitConverter.ToInt32(metadataLengthBytes.Received, 0);
+        var metadataLength = BitConverter.ToInt32(metadataLengthBytes.Received, 0);
 
-      // Read and apply metadata
-      if (metadataLength > 0)
-      {
-        var metadataBytes = await currentEnumeration.EnumerateUntil(metadataLength, 0, cancellationToken);
-        currentEnumeration = metadataBytes.Next;
+        // Read and apply metadata
+        if (metadataLength > 0)
+        {
+          var metadataBytes = await currentEnumeration.EnumerateUntil(metadataLength, 0, cancellationToken);
+          currentEnumeration = metadataBytes.Next;
 
-        var metadataJson = System.Text.Encoding.UTF8.GetString(metadataBytes.Received, 0, metadataLength);
-        var responseMetadata = System.Text.Json.JsonSerializer.Deserialize<HttpResponseMetadata>(metadataJson) ?? defaultResponseMetadata;
+          var metadataJson = System.Text.Encoding.UTF8.GetString(metadataBytes.Received, 0, metadataLength);
+          var responseMetadata = System.Text.Json.JsonSerializer.Deserialize<HttpResponseMetadata>(metadataJson) ?? defaultResponseMetadata;
 
-        responseMetadata.Apply(context.Response);
+          responseMetadata.Apply(context.Response);
+        }
+        else
+        {
+          defaultResponseMetadata.Apply(context.Response);
+        }
+
+        // Write the rest of the response body
+        await foreach (var chunk in currentEnumeration)
+        {
+          await context.Response.BodyWriter.WriteAsync(chunk, cancellationToken);
+        }
       }
-      else
+      finally
       {
-        defaultResponseMetadata.Apply(context.Response);
+        await context.Response.BodyWriter.CompleteAsync();
+        await context.Response.CompleteAsync();
       }
-
-      // Write the rest of the response body
-      await foreach (var chunk in currentEnumeration)
-      {
-        await context.Response.BodyWriter.WriteAsync(chunk, cancellationToken);
-      }
-
-      await context.Response.BodyWriter.CompleteAsync();
     }
   }
 }

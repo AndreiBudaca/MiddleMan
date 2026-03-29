@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+**/node_modules/
+MiddleMan.Web/ClientApp/build/
+MiddleMan.Web/ClientApp/.react-router/
+dev_tools/
+**/*.user
+**/*.md
