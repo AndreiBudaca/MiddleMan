@@ -18,7 +18,7 @@ namespace MiddleMan.Communication.SyncMechanisms
           using var leaveMonitorDisposable = await monitor.EnterAsync(cancellationToken);
 
           resource = await getterFunc.Invoke();
-          if (!resourceCondition.Invoke(resource))
+          while (!resourceCondition.Invoke(resource))
           {
             await monitor.WaitAsync(cancellationToken);
             resource = await getterFunc.Invoke();
@@ -54,19 +54,15 @@ namespace MiddleMan.Communication.SyncMechanisms
 
     private AsyncMonitor GetOrCreate(T session)
     {
-      _ = monitors.TryGetValue(session, out var result);
-      if (result != null) return result;
-
       lock (globalLock)
       {
-        _ = monitors.TryGetValue(session, out result);
-        if (result != null) return result;
+        var exists = monitors.TryGetValue(session, out var result);
+        if (exists && result != null) return result;
 
         result = new AsyncMonitor();
         monitors.Add(session, result);
+        return result;
       }
-
-      return result;
     }
 
     private void Discard(T session)

@@ -96,7 +96,7 @@ namespace MiddleMan.Communication.Channels
       return database.StreamAddAsync(streamKey, "data", data);
     }
 
-    public async IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, string heartbeatKey, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
       using var blockingConnection = await ConnectionMultiplexer.ConnectAsync(new ConfigurationOptions
       {
@@ -111,21 +111,8 @@ namespace MiddleMan.Communication.Channels
 
       while (!cancellationToken.IsCancellationRequested && !communicationEnded)
       {
-        RedisResult result;
-        try
-        {
-          result = await db.ExecuteAsync("XREAD", "BLOCK", ServerCapabilities.GlobalTimeoutSeconds * 1000, "COUNT", ServerCapabilities.IntraServerBufferedChunks, "STREAMS", streamKey, lastId);
-        }
-        catch { throw; }
-
-        if (result.IsNull)
-        {
-          if (!await HeartbeatExistsAsync(heartbeatKey))
-          {
-            break;
-          }
-          continue;
-        }
+        var result = await db.ExecuteAsync("XREAD", "BLOCK", ServerCapabilities.GlobalTimeoutSeconds * 1000, "COUNT", ServerCapabilities.IntraServerBufferedChunks, "STREAMS", streamKey, lastId);
+        if (result.IsNull) break;
 
         var (idsToDelete, chunks) = HandleStreamResult((RedisResult[])result!);
 
@@ -154,16 +141,6 @@ namespace MiddleMan.Communication.Channels
       }
 
       await database.KeyDeleteAsync(streamKey);
-    }
-
-    public Task RefreshHeartbeatAsync(string heartbeatKey, TimeSpan ttl)
-    {
-      return database.StringSetAsync(heartbeatKey, "1", ttl);
-    }
-
-    public Task<bool> HeartbeatExistsAsync(string heartbeatKey)
-    {
-      return database.KeyExistsAsync(heartbeatKey);
     }
 
     public async Task DeleteKeyAsync(string key)

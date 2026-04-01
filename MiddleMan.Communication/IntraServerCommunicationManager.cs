@@ -38,7 +38,6 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
     if (!sameServer)
     {
       inMemoryContext.RemoveList(RequestChannelTokenKey(correlation));
-      await communicationChannel.DeleteKeyAsync(HeartbeatKey(correlation));
       await communicationChannel.DeleteKeyAsync(RequestChannelChunksKey(correlation));
       await communicationChannel.DeleteKeyAsync(ResponseChannelChunksKey(correlation));
     }
@@ -49,7 +48,6 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
     if (!sameServer)
     {
       inMemoryContext.RemoveList(ResponseChannelTokenKey(correlation));
-      await communicationChannel.DeleteKeyAsync(HeartbeatKey(correlation));
     }
   }
 
@@ -90,12 +88,12 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
 
   public IAsyncEnumerable<byte[]> ReadRequestAsync(Guid correlation, CancellationToken cancellationToken = default)
   {
-    return ReadAsync(RequestChannelChunksKey(correlation), RequestChannelTokenKey(correlation), correlation, cancellationToken);
+    return ReadAsync(RequestChannelChunksKey(correlation), RequestChannelTokenKey(correlation), cancellationToken);
   }
 
   public IAsyncEnumerable<byte[]> ReadResponseAsync(Guid correlation, CancellationToken cancellationToken = default)
   {
-    return ReadAsync(ResponseChannelChunksKey(correlation), ResponseChannelTokenKey(correlation), correlation, cancellationToken);
+    return ReadAsync(ResponseChannelChunksKey(correlation), ResponseChannelTokenKey(correlation), cancellationToken);
   }
 
   private async Task RegisterTokens(string tokensKey, Guid correlation)
@@ -112,14 +110,11 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
 
   private async Task WriteAsync(IAsyncEnumerable<byte[]> dataSource, string topic, string tokensKey, Guid correlation, CancellationToken cancellationToken = default)
   {
-    var heartbeatTtl = TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds);
     try
     {
       await foreach (var chunk in dataSource.WithCancellation(cancellationToken))
       {
         await WaitForToken(tokensKey, correlation, cancellationToken);
-
-        await communicationChannel.RefreshHeartbeatAsync(HeartbeatKey(correlation), heartbeatTtl);
         await communicationChannel.AddToStreamAsync(topic, chunk);
       }
     }
@@ -129,12 +124,10 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
     }
   }
 
-  private async IAsyncEnumerable<byte[]> ReadAsync(string topic, string tokensKey, Guid correlation, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+  private async IAsyncEnumerable<byte[]> ReadAsync(string topic, string tokensKey, [EnumeratorCancellation] CancellationToken cancellationToken = default)
   {
-    var heartbeatTtl = TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds);
-    await foreach (var chunk in communicationChannel.ConsumeStreamAsync(topic, HeartbeatKey(correlation), cancellationToken))
+    await foreach (var chunk in communicationChannel.ConsumeStreamAsync(topic, cancellationToken))
     {
-      await communicationChannel.RefreshHeartbeatAsync(HeartbeatKey(correlation), heartbeatTtl);
       yield return chunk;
       await communicationChannel.PublishAsync(tokensKey, 1);
     }
@@ -142,38 +135,19 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
 
   private async Task WaitForToken(string tokensKey, Guid correlation, CancellationToken cancellationToken)
   {
-    var timeout = TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds);
+    using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    attemptCts.CancelAfter(TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds));
 
-    while (true)
-    {
-      cancellationToken.ThrowIfCancellationRequested();
-
-      using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-      attemptCts.CancelAfter(timeout);
-
-      try
-      {
-        await sessionMonitors.WaitToGetResource(
-          async () => inMemoryContext.PopList<int>(tokensKey),
-          (token) => token > 0,
-          correlation,
-          attemptCts.Token);
-        return;
-      }
-      catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-      {
-        if (!await communicationChannel.HeartbeatExistsAsync(HeartbeatKey(correlation)))
-        {
-          throw;
-        }
-      }
-    }
+    _ = await sessionMonitors.WaitToGetResource(
+      async () => inMemoryContext.PopList<int>(tokensKey),
+      (token) => token > 0,
+      correlation,
+      attemptCts.Token);
   }
 
   private static string RequestChannelChunksKey(Guid correlation) => $"intra-server-request:chunks:{correlation}";
   private static string ResponseChannelChunksKey(Guid correlation) => $"intra-server-response:chunks:{correlation}";
   private static string RequestChannelTokenKey(Guid correlation) => $"intra-server-request:token:{correlation}";
   private static string ResponseChannelTokenKey(Guid correlation) => $"intra-server-response:token:{correlation}";
-  private static string HeartbeatKey(Guid correlation) => $"intra-server:heartbeat:{correlation}";
   private static string PingKey(Guid correlation) => $"intra-server-ping:{correlation}";
 }

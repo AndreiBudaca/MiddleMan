@@ -2,6 +2,8 @@
 using MiddleMan.Communication.Adapters;
 using MiddleMan.Communication.SyncMechanisms;
 using System.Threading.Channels;
+using MiddleMan.Core;
+using System.Runtime.CompilerServices;
 
 namespace MiddleMan.Communication
 {
@@ -43,30 +45,38 @@ namespace MiddleMan.Communication
       );
     }
 
-    public Task WriteAsync(IDataWriterAdapter adapter, Guid correlation)
+    public Task WriteAsync(IDataWriterAdapter adapter, Guid correlation, CancellationToken cancellationToken = default)
     {
-      return WriteAsync(adapter.Adapt(), correlation);
+      return WriteAsync(adapter.Adapt(), correlation, cancellationToken);
     }
 
-    public async Task WriteAsync(IAsyncEnumerable<byte[]> dataSource, Guid correlation)
+    public async Task WriteAsync(IAsyncEnumerable<byte[]> dataSource, Guid correlation, CancellationToken cancellationToken = default)
     {
-      var writer = await sessionWriteMonitor.WaitToGetResource
-      (
-        async () => context.GetFromHash<ChannelWriter<byte[]>>("writers", correlation.ToString()),
-        (writer) => writer != null,
-        correlation
-      );
+      ChannelWriter<byte[]>? writer;
+
+      using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+      {
+        cts.CancelAfter(TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds));
+
+        writer = await sessionWriteMonitor.WaitToGetResource
+        (
+          async () => context.GetFromHash<ChannelWriter<byte[]>>("writers", correlation.ToString()),
+          (writer) => writer != null,
+          correlation,
+          cts.Token
+        );
+      }
 
       if (writer != null)
       {
         try
         {
-          await foreach (var chunk in dataSource)
+          await foreach (var chunk in dataSource.WithCancellation(cancellationToken))
           {
             var buff = new byte[chunk.Length];
             Buffer.BlockCopy(chunk, 0, buff, 0, chunk.Length);
 
-            await writer.WriteAsync(buff);
+            await writer.WriteAsync(buff, cancellationToken);
           }
         }
         finally
@@ -78,14 +88,22 @@ namespace MiddleMan.Communication
       context.RemoveFromHash("writers", correlation.ToString());
     }
 
-    public async IAsyncEnumerable<byte[]> ReadAsync(Guid correlation)
+    public async IAsyncEnumerable<byte[]> ReadAsync(Guid correlation, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-      var reader = await sessionReadMonitor.WaitToGetResource
-      (
-        async () => context.GetFromHash<ChannelReader<byte[]>>("readers", correlation.ToString()),
-        (reader) => reader != null,
-        correlation
-      );
+      ChannelReader<byte[]>? reader;
+
+      using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+      {
+        cts.CancelAfter(TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds));
+        
+        reader = await sessionReadMonitor.WaitToGetResource
+        (
+          async () => context.GetFromHash<ChannelReader<byte[]>>("readers", correlation.ToString()),
+          (reader) => reader != null,
+          correlation,
+          cts.Token
+        );
+      }
 
       if (reader == null)
       {
@@ -93,7 +111,7 @@ namespace MiddleMan.Communication
       }
       else
       {
-        await foreach (var chunk in reader.ReadAllAsync())
+        await foreach (var chunk in reader.ReadAllAsync(cancellationToken))
         {
           yield return chunk;
         }

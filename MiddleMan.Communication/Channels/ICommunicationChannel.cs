@@ -19,11 +19,7 @@ namespace MiddleMan.Communication.Channels
     #region "STREAMS"
     public Task AddToStreamAsync(string streamKey, byte[] data);
 
-    public IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, string heartbeatKey, CancellationToken cancellationToken);
-
-    public Task RefreshHeartbeatAsync(string heartbeatKey, TimeSpan ttl);
-
-    public Task<bool> HeartbeatExistsAsync(string heartbeatKey);
+    public IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, CancellationToken cancellationToken);
 
     public Task DeleteKeyAsync(string key);
     #endregion
