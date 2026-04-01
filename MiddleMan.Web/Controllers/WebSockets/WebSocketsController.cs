@@ -70,23 +70,20 @@ namespace MiddleMan.Web.Controllers.WebSockets
       }
 
       var capabilities = onInstanceClientConnection?.ClientCapabilities ?? externalClientConnection?.ClientCapabilities ?? new ClientCapabilities();
-      if (capabilities.SupportsStreaming)
-      {
-        await StreamInvocation(method, onInstanceClientConnection ?? externalClientConnection!, onInstanceClientConnection != null, hubClient, cancellationToken);
-      }
-      else
-      {
+
+      var result = capabilities.SupportsStreaming ?
+        await StreamInvocation(method, onInstanceClientConnection ?? externalClientConnection!, onInstanceClientConnection != null, hubClient, cancellationToken) :
         await DirectInvocation(method, onInstanceClientConnection ?? externalClientConnection!, hubClient, cancellationToken);
-      }
+      
+      await result.ApplyResultAsync(HttpContext);
     }
 
-    private async Task DirectInvocation(string method, ClientConnection webSocketClientConnection,
+    private async Task<IControllerDefinedResult> DirectInvocation(string method, ClientConnection webSocketClientConnection,
      ISingleClientProxy hubClient, CancellationToken cancellationToken)
     {
       if (HttpContext.Request.ContentLength > ServerCapabilities.MaxContentLength)
       {
-        await new StatusResult(StatusCodes.Status413PayloadTooLarge).ApplyResultAsync(HttpContext);
-        return;
+        return new StatusResult(StatusCodes.Status413PayloadTooLarge);
       }
 
       var communicationManager = new DirectInvocationCommunicationManager(HttpContext.Request, new HttpUser
@@ -95,10 +92,10 @@ namespace MiddleMan.Web.Controllers.WebSockets
       }, sendMetadata: webSocketClientConnection.ClientCapabilities.SendHTTPMetadata);
 
       var response = await communicationManager.InvokeAsync(hubClient, method, cancellationToken);
-      await new MiddleManClientDirectInvocationResult(response, cancellationToken).ApplyResultAsync(HttpContext);
+      return new MiddleManClientDirectInvocationResult(response, cancellationToken);
     }
 
-    private async Task StreamInvocation(string method, ClientConnection webSocketClientConnection, bool isSameServerConnection,
+    private async Task<IControllerDefinedResult> StreamInvocation(string method, ClientConnection webSocketClientConnection, bool isSameServerConnection,
      ISingleClientProxy hubClient, CancellationToken cancellationToken)
     {
       var correlation = Guid.NewGuid();
@@ -113,14 +110,9 @@ namespace MiddleMan.Web.Controllers.WebSockets
         await intraServerCommunicationManager.RegisterRequestSession(correlation, isSameServerConnection);
         await hubClient.SendAsync(method, correlation, cancellationToken);
 
-        if (isSameServerConnection)
-        {
-          await SameServerStreamInvocation(correlation, adapter, cancellationToken);
-        }
-        else
-        {
+        return isSameServerConnection ?
+          await SameServerStreamInvocation(correlation, adapter, cancellationToken) :
           await IntraServerStreamInvocation(correlation, adapter, cancellationToken);
-        }
       }
       finally
       {
@@ -128,22 +120,18 @@ namespace MiddleMan.Web.Controllers.WebSockets
       }
     }
 
-    private Task SameServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter,CancellationToken cancellationToken)
+    private async Task<IControllerDefinedResult> SameServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, CancellationToken cancellationToken)
     {
-      return Task.WhenAll(
-        streamingCommunicationManager.WriteAsync(adapter, correlation),
-        new MiddleManClientStreamingResult(streamingCommunicationManager.ReadAsync(correlation), cancellationToken).ApplyResultAsync(HttpContext)
-      );
+      await streamingCommunicationManager.WriteAsync(adapter, correlation);
+
+      return new MiddleManClientStreamingResult(streamingCommunicationManager.ReadAsync(correlation), cancellationToken);
     }
 
-    private Task IntraServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, CancellationToken cancellationToken)
+    private async Task<IControllerDefinedResult> IntraServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, CancellationToken cancellationToken)
     {
-      return Task.WhenAll(
-        intraServerCommunicationManager.WriteRequestAsync(adapter, correlation, cancellationToken),
-        new MiddleManClientStreamingResult(
-          intraServerCommunicationManager.ReadResponseAsync(correlation, cancellationToken), cancellationToken)
-        .ApplyResultAsync(HttpContext)
-      );
+      await intraServerCommunicationManager.WriteRequestAsync(adapter, correlation, cancellationToken);
+
+      return new MiddleManClientStreamingResult(intraServerCommunicationManager.ReadResponseAsync(correlation, cancellationToken), cancellationToken);
     }
 
     private async Task<ClientConnection?> GetExternalClientConnection(string webSocketClientName)

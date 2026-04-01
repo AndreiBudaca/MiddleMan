@@ -7,7 +7,52 @@ namespace MiddleMan.Communication.SyncMechanisms
     private readonly Dictionary<T, AsyncMonitor?> monitors = [];
     private readonly object globalLock = new();
 
-    private AsyncMonitor Get(T session)
+    public async Task<K> WaitToGetResource<K>(Func<Task<K>> getterFunc, Func<K, bool> resourceCondition, T session, CancellationToken cancellationToken = default)
+    {
+      try
+      {
+        var resource = await getterFunc.Invoke();
+        if (!resourceCondition.Invoke(resource))
+        {
+          var monitor = GetOrCreate(session);
+          using var leaveMonitorDisposable = await monitor.EnterAsync(cancellationToken);
+
+          resource = await getterFunc.Invoke();
+          if (!resourceCondition.Invoke(resource))
+          {
+            await monitor.WaitAsync(cancellationToken);
+            resource = await getterFunc.Invoke();
+          }
+        }
+        return resource;
+      }
+      finally
+      {
+        Discard(session);
+      }
+    }
+
+    public async Task SetResourceAndNotify(Func<Task> setterFunc, T session)
+    {
+      await setterFunc.Invoke();
+
+      var monitor = Get(session);
+      if (monitor == null) return; // session discarded or not initialized yet, no need to pulse
+
+      using var leaveMonitorDisposable = await monitor.EnterAsync();
+      monitor.PulseAll();
+    }
+
+    private AsyncMonitor? Get(T session)
+    {
+      lock (globalLock)
+      {
+        _ = monitors.TryGetValue(session, out var result);
+        return result;
+      }
+    }
+
+    private AsyncMonitor GetOrCreate(T session)
     {
       _ = monitors.TryGetValue(session, out var result);
       if (result != null) return result;
@@ -30,40 +75,6 @@ namespace MiddleMan.Communication.SyncMechanisms
       {
         monitors.Remove(session);
       }
-    }
-
-    public async Task<K> WaitToGetResource<K>(Func<Task<K>> getterFunc, Func<K, bool> resourceCondition, T session, CancellationToken cancellationToken = default)
-    {
-      try
-      {
-        var resource = await getterFunc.Invoke();
-        if (!resourceCondition.Invoke(resource))
-        {
-          var monitor = Get(session);
-          using var leaveMonitorDisposable = await monitor.EnterAsync(cancellationToken);
-
-          resource = await getterFunc.Invoke();
-          if (!resourceCondition.Invoke(resource))
-          {
-            await monitor.WaitAsync(cancellationToken);
-            resource = await getterFunc.Invoke();
-          }
-        }
-        return resource;
-      }
-      finally
-      {
-        Discard(session);
-      }
-    }
-
-    public async Task SetResourceAndNotify(Func<Task> setterFunc, T session)
-    {
-      var monitor = Get(session);
-      using var leaveMonitorDisposable = await monitor.EnterAsync();
-      await setterFunc.Invoke();
-      monitor.PulseAll();
-      Discard(session);
     }
   }
 }

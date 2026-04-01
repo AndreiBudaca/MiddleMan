@@ -125,10 +125,8 @@ namespace MiddleMan.Web.Hubs
         {
           await intraServerCommunicationManager.RegisterResponseSession(correlation, false);
 
-          await Task.WhenAll(
-            communicationManager.WriteAsync(intraServerCommunicationManager.ReadRequestAsync(correlation), correlation),
-            intraServerCommunicationManager.WriteResponseAsync(communicationManager.ReadAsync(correlation), correlation)
-          );
+          await communicationManager.WriteAsync(intraServerCommunicationManager.ReadRequestAsync(correlation), correlation);
+          await intraServerCommunicationManager.WriteResponseAsync(communicationManager.ReadAsync(correlation), correlation);
         }
         finally
         {
