@@ -31,16 +31,16 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
     }
   }
 
-  public async Task ClearRequestSession(Guid correlation, bool sameServer)
+  public Task ClearRequestSession(Guid correlation, bool sameServer)
   {
     inMemoryContext.RemoveFromHash("intraServerRequestSessions", correlation.ToString());
 
     if (!sameServer)
     {
       inMemoryContext.RemoveList(RequestChannelTokenKey(correlation));
-      await communicationChannel.DeleteKeyAsync(RequestChannelChunksKey(correlation));
-      await communicationChannel.DeleteKeyAsync(ResponseChannelChunksKey(correlation));
     }
+
+    return Task.CompletedTask;
   }
 
   public async Task ClearResponseSession(Guid correlation, bool sameServer)
@@ -120,7 +120,7 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
     }
     finally
     {
-      await communicationChannel.AddToStreamAsync(topic, []);
+      await communicationChannel.SignalStreamEndAsync(topic);
     }
   }
 
@@ -128,8 +128,8 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
   {
     await foreach (var chunk in communicationChannel.ConsumeStreamAsync(topic, cancellationToken))
     {
-      yield return chunk;
       await communicationChannel.PublishAsync(tokensKey, 1);
+      yield return chunk;
     }
   }
 

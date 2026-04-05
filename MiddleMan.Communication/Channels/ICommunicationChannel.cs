@@ -19,6 +19,8 @@ namespace MiddleMan.Communication.Channels
     #region "STREAMS"
     public Task AddToStreamAsync(string streamKey, byte[] data);
 
+    public Task SignalStreamEndAsync(string streamKey);
+
     public IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, CancellationToken cancellationToken);
 
     public Task DeleteKeyAsync(string key);

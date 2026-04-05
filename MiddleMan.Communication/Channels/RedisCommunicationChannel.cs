@@ -93,7 +93,17 @@ namespace MiddleMan.Communication.Channels
     #region "STREAMS"
     public Task AddToStreamAsync(string streamKey, byte[] data)
     {
-      return database.StreamAddAsync(streamKey, "data", data);
+      return database.StreamAddAsync(streamKey, [
+        new NameValueEntry("type", "data"),
+        new NameValueEntry("data", data)
+      ]);
+    }
+
+    public Task SignalStreamEndAsync(string streamKey)
+    {
+      return database.StreamAddAsync(streamKey, [
+        new NameValueEntry("type", "end")
+      ]);
     }
 
     public async IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -109,38 +119,39 @@ namespace MiddleMan.Communication.Channels
       var lastId = "0-0";
       var communicationEnded = false;
 
-      while (!cancellationToken.IsCancellationRequested && !communicationEnded)
+      try
       {
-        var result = await db.ExecuteAsync("XREAD", "BLOCK", ServerCapabilities.GlobalTimeoutSeconds * 1000, "COUNT", ServerCapabilities.IntraServerBufferedChunks, "STREAMS", streamKey, lastId);
-        if (result.IsNull) break;
-
-        var (idsToDelete, chunks) = HandleStreamResult((RedisResult[])result!);
-
-        if (idsToDelete.Count > 0)
+        while (!cancellationToken.IsCancellationRequested && !communicationEnded)
         {
-          await database.StreamDeleteAsync(streamKey, [.. idsToDelete]);
-        }
+          var result = await db.ExecuteAsync("XREAD", "BLOCK", ServerCapabilities.GlobalTimeoutSeconds * 1000, "COUNT", ServerCapabilities.IntraServerBufferedChunks, "STREAMS", streamKey, lastId);
+          if (result.IsNull) break;
 
-        foreach (var data in chunks!)
-        {
-          if (data.Length > 0)
+          var (idsToDelete, chunks, streamEnded) = HandleStreamResult((RedisResult[])result!);
+
+          if (idsToDelete.Count > 0)
+          {
+            await database.StreamDeleteAsync(streamKey, [.. idsToDelete]);
+          }
+
+          foreach (var data in chunks)
           {
             yield return data;
           }
-          else
+
+          if (streamEnded)
           {
             communicationEnded = true;
-            break;
+          }
+          else if (idsToDelete.Count > 0)
+          {
+            lastId = ((string)idsToDelete.Last())!;
           }
         }
-
-        if (!communicationEnded)
-        {
-          lastId = ((string)idsToDelete.Last())!;
-        }
       }
-
-      await database.KeyDeleteAsync(streamKey);
+      finally
+      {
+        await database.KeyDeleteAsync(streamKey);
+      }
     }
 
     public async Task DeleteKeyAsync(string key)
@@ -172,10 +183,11 @@ namespace MiddleMan.Communication.Channels
       return (byte[])redisValue!;
     }
 
-    private static (List<RedisValue> toBeDeleted, IEnumerable<byte[]> chunks) HandleStreamResult(RedisResult[]? streamsArray)
+    private static (List<RedisValue> toBeDeleted, IEnumerable<byte[]> chunks, bool streamEnded) HandleStreamResult(RedisResult[]? streamsArray)
     {
       var toBeDeleted = new List<RedisValue>();
       var chunks = new List<byte[]>();
+      var streamEnded = false;
 
       foreach (var streamResult in streamsArray!)
       {
@@ -187,14 +199,24 @@ namespace MiddleMan.Communication.Channels
           var messageParts = (RedisResult[])message!;
           var messageId = (string)messageParts![0]!;
           var fields = (RedisResult[])messageParts[1]!;
-          var data = (byte[])fields![1]!;
+          // fields layout: ["type", <typeValue>, "data", <dataValue>] for data entries
+          //                 ["type", "end"] for sentinel entries
+          var type = (string)fields![1]!;
 
           toBeDeleted.Add(messageId);
-          chunks.Add(data);
+
+          if (type == "end")
+          {
+            streamEnded = true;
+          }
+          else
+          {
+            chunks.Add((byte[])fields[3]!);
+          }
         }
       }
 
-      return (toBeDeleted, chunks);
+      return (toBeDeleted, chunks, streamEnded);
     }
   }
 }
