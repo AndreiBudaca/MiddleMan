@@ -23,47 +23,30 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
     }
   }
 
-  public async Task RegisterResponseSession(Guid correlation, bool sameServer)
+  public async Task RegisterResponseSession(Guid correlation)
   {
-    if (!sameServer)
-    {
-      await RegisterTokens(ResponseChannelTokenKey(correlation), correlation);
-    }
+    await RegisterTokens(ResponseChannelTokenKey(correlation), correlation);
   }
 
-  public Task ClearRequestSession(Guid correlation, bool sameServer)
+  public async Task ClearRequestSession(Guid correlation)
   {
     inMemoryContext.RemoveFromHash("intraServerRequestSessions", correlation.ToString());
+    inMemoryContext.RemoveList(RequestChannelTokenKey(correlation));
 
-    if (!sameServer)
-    {
-      inMemoryContext.RemoveList(RequestChannelTokenKey(correlation));
-    }
-
-    return Task.CompletedTask;
+    await communicationChannel.UnsubscribeAsync(RequestChannelTokenKey(correlation));
+    await communicationChannel.DeleteKeyAsync(RequestChannelChunksKey(correlation));
+    await communicationChannel.DeleteKeyAsync(ResponseChannelChunksKey(correlation));
   }
 
-  public async Task ClearResponseSession(Guid correlation, bool sameServer)
+  public async Task ClearResponseSession(Guid correlation)
   {
-    if (!sameServer)
-    {
-      inMemoryContext.RemoveList(ResponseChannelTokenKey(correlation));
-    }
+    inMemoryContext.RemoveList(ResponseChannelTokenKey(correlation));
+    await communicationChannel.UnsubscribeAsync(ResponseChannelTokenKey(correlation));
   }
 
   public bool ExistsRequestSession(Guid correlation)
   {
     return inMemoryContext.ExistsInHash("intraServerRequestSessions", correlation.ToString());
-  }
-
-  public Task<Task<string?>> WaitForOtherServer(Guid correlation)
-  {
-    return communicationChannel.PeekChannelAsync<string>(PingKey(correlation));
-  }
-
-  public Task PingOtherServer(Guid correlation)
-  {
-    return communicationChannel.PublishAsync(PingKey(correlation), correlation.ToString());
   }
 
   public Task WriteRequestAsync(IDataWriterAdapter dataWriterAdapter, Guid correlation, CancellationToken cancellationToken = default)

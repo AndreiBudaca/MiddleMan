@@ -123,14 +123,14 @@ namespace MiddleMan.Web.Hubs
       {
         try
         {
-          await intraServerCommunicationManager.RegisterResponseSession(correlation, false);
+          await intraServerCommunicationManager.RegisterResponseSession(correlation);
 
           await communicationManager.WriteAsync(intraServerCommunicationManager.ReadRequestAsync(correlation), correlation);
           await intraServerCommunicationManager.WriteResponseAsync(communicationManager.ReadAsync(correlation), correlation);
         }
         finally
         {
-          await intraServerCommunicationManager.ClearResponseSession(correlation, false);
+          await intraServerCommunicationManager.ClearResponseSession(correlation);
         }
       }
     }
