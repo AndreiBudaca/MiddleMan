@@ -2,7 +2,7 @@ services:
   middleman:
     image: andyyy2k/middleman:1.0
     env_file:
-      - .env
+      - middleman.env
     environment:
       - ConnectionStrings__Redis=redis:6379
       - ASPNETCORE_HTTP_PORTS=80
@@ -17,8 +17,6 @@ services:
     image: redis:7.2
     networks:
       - middleman-net
-    ports:
-      - "6379:6379"
 
 networks:
   middleman-net:

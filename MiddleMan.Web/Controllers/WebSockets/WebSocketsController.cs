@@ -1,12 +1,11 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using MiddleMan.Communication;
 using MiddleMan.Core;
 using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
-using MiddleMan.Web.Communication;
-using MiddleMan.Web.Communication.Adapters;
-using MiddleMan.Web.Communication.Metadata;
+using MiddleMan.Web.Communication.ClientInvocator;
 using MiddleMan.Web.Controllers.ActionResults;
 using MiddleMan.Web.Hubs;
 using MiddleMan.Web.Infrastructure.Attributes;
@@ -19,73 +18,82 @@ namespace MiddleMan.Web.Controllers.WebSockets
   [DisableFormValueModelBinding]
   public class WebSocketsController(
     IHubContext<PlaygroundHub> hubContext,
-    StreamingCommunicationManager communicationManager,
-    IWebSocketClientConnectionsService webSocketClientConnectionsService) : Controller
+    StreamingCommunicationManager streamingCommunicationManager,
+    IntraServerCommunicationManager intraServerCommunicationManager,
+    ClientInfoCommunicationManager clientInfoCommunicationManager,
+    IWebSocketClientConnectionsService webSocketClientConnectionsService,
+    ILogger<WebSocketsController> logger) : Controller
   {
     private readonly IHubContext<PlaygroundHub> hubContext = hubContext;
     private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
-    private readonly StreamingCommunicationManager communicationManager = communicationManager;
+    private readonly StreamingCommunicationManager streamingCommunicationManager = streamingCommunicationManager;
+    private readonly ClientInfoCommunicationManager clientInfoCommunicationManager = clientInfoCommunicationManager;
+    private readonly IntraServerCommunicationManager intraServerCommunicationManager = intraServerCommunicationManager;
+    private readonly ILogger<WebSocketsController> logger = logger;
 
     [RequestSizeLimit(1_000_000_000)]
     [Route("{webSocketClientName}/{method}/{*rest}")]
-    public async Task<IActionResult> Send([FromRoute] string webSocketClientName, [FromRoute] string method, CancellationToken cancellationToken)
+    public async Task Send([FromRoute] string webSocketClientName, [FromRoute] string method, CancellationToken cancellationToken)
     {
-      if (string.IsNullOrWhiteSpace(webSocketClientName)) return base.NotFound();
-      if (string.IsNullOrWhiteSpace(method)) return NotFound();
-      if (HttpContext.Request.ContentLength == null && HttpContext.Request.Method != HttpMethods.Get) return new StatusCodeResult(StatusCodes.Status411LengthRequired);
+      if (string.IsNullOrWhiteSpace(webSocketClientName) || string.IsNullOrWhiteSpace(method))
+      {
+        await new StatusResult(StatusCodes.Status400BadRequest).ApplyResultAsync(HttpContext);
+        return;
+      }
 
-      var webSocketClientConnection = await webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), webSocketClientName);
-      if (webSocketClientConnection == null || string.IsNullOrWhiteSpace(webSocketClientConnection.ConnectionId)) return NotFound();
+      if (HttpContext.Request.ContentLength == null && HttpContext.Request.Method != HttpMethods.Get)
+      {
+        await new StatusResult(StatusCodes.Status411LengthRequired).ApplyResultAsync(HttpContext);
+        return;
+      }
 
-      var hubClient = hubContext.Clients.Client(webSocketClientConnection.ConnectionId);
+      var onInstanceClientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), webSocketClientName);
+      var externalClientConnection = onInstanceClientConnection == null ? await GetExternalClientConnection(webSocketClientName) : null;
+
+      var connectionExists = onInstanceClientConnection != null || externalClientConnection != null;
+      var connectionIsValid = !string.IsNullOrWhiteSpace(onInstanceClientConnection?.ConnectionId) || !string.IsNullOrWhiteSpace(externalClientConnection?.ConnectionId);
+
+      if (!connectionExists || !connectionIsValid)
+      {
+        await new StatusResult(StatusCodes.Status404NotFound).ApplyResultAsync(HttpContext);
+        return;
+      }
+
+      var connectionId = onInstanceClientConnection?.ConnectionId ?? externalClientConnection!.ConnectionId!;
+      var hubClient = hubContext.Clients.Client(connectionId);
       if (hubClient == null)
       {
-        await webSocketClientConnectionsService.DeleteWebSocketClientConnection(User.Identifier(), webSocketClientName, webSocketClientConnection.ConnectionId);
-        return NotFound();
+        webSocketClientConnectionsService.DeleteWebSocketClientConnection(User.Identifier(), webSocketClientName, connectionId);
+        await new StatusResult(StatusCodes.Status404NotFound).ApplyResultAsync(HttpContext);
+        return;
       }
 
-      if (webSocketClientConnection.ClientCapabilities.SupportsStreaming)
-      {
-        return await StreamInvocation(method, webSocketClientConnection, hubClient, cancellationToken);
-      }
+      var capabilities = onInstanceClientConnection?.ClientCapabilities ?? externalClientConnection?.ClientCapabilities ?? new ClientCapabilities();
 
-      return await DirectInvocation(method, webSocketClientConnection, hubClient, cancellationToken);
+      IClientInvoker invoker = capabilities.SupportsStreaming ?
+        new StreamInvoker(intraServerCommunicationManager, streamingCommunicationManager, logger) :
+        new DirectClientInvoker(logger);
+
+      var result = await invoker.Invoke(HttpContext, method, onInstanceClientConnection ?? externalClientConnection!, onInstanceClientConnection != null, hubClient, cancellationToken);
+      await result.ApplyResultAsync(HttpContext);
+      await invoker.Cleanup();
     }
 
-    private async Task<IActionResult> DirectInvocation(string method, ClientConnection webSocketClientConnection,
-     ISingleClientProxy hubClient, CancellationToken cancellationToken)
+    private async Task<ClientConnection?> GetExternalClientConnection(string webSocketClientName)
     {
-      if (HttpContext.Request.ContentLength > ServerCapabilities.MaxContentLength)
+      var cts = new CancellationTokenSource(TimeSpan.FromSeconds(ServerCapabilities.ClientConnectionTimeoutSeconds));
+      try
       {
-        return new StatusCodeResult(StatusCodes.Status413PayloadTooLarge);
+        return await clientInfoCommunicationManager.QueryClientConnection(User.Identifier(), webSocketClientName, cts.Token);
       }
-
-      var communicationManager = new DirectInvocationCommunicationManager(HttpContext.Request, new HttpUser
+      catch (OperationCanceledException) when (cts.IsCancellationRequested)
       {
-        Identifier = User.Identifier(),
-      }, sendMetadata: webSocketClientConnection.ClientCapabilities.SendHTTPMetadata);
-
-      var response = await communicationManager.InvokeAsync(hubClient, method, cancellationToken);
-      return new MiddleManClientDirectInvocationResult(response, cancellationToken);
-    }
-
-    private async Task<IActionResult> StreamInvocation(string method, ClientConnection webSocketClientConnection,
-     ISingleClientProxy hubClient, CancellationToken cancellationToken)
-    {
-      var correlation = Guid.NewGuid();
-
-      await hubClient.SendAsync(method, correlation, cancellationToken);
-
-      var adapter = new HttpRequestAdapterAdapter(HttpContext.Request, new HttpUser
+        return null;
+      }
+      finally
       {
-        Identifier = User.Identifier(),
-      }, webSocketClientConnection.ClientCapabilities.SendHTTPMetadata);
-
-      await communicationManager.WriteAsync(adapter, correlation);
-
-      return new MiddleManClientStreamingResult(communicationManager.ReadAsync(correlation), cancellationToken);
+        cts.Dispose();
+      }
     }
-
-    private bool RequiresStreaming => HttpContext.Request.ContentLength > ServerCapabilities.MaxContentLength;
   }
 }

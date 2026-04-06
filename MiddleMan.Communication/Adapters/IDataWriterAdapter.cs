@@ -1,4 +1,4 @@
-﻿namespace MiddleMan.Web.Communication.Adapters
+﻿namespace MiddleMan.Communication.Adapters
 {
   public interface IDataWriterAdapter
   {

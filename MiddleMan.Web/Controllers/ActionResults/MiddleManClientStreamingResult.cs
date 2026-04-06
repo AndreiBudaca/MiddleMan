@@ -1,10 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using MiddleMan.Communication.Adapters;
 using MiddleMan.Core.Extensions;
 using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Controllers.ActionResults
 {
-  public class MiddleManClientStreamingResult : ActionResult
+  public class MiddleManClientStreamingResult : IControllerDefinedResult
   {
     private readonly IAsyncEnumerable<byte[]>? response = null;
     private readonly CancellationToken cancellationToken = CancellationToken.None;
@@ -17,45 +17,60 @@ namespace MiddleMan.Web.Controllers.ActionResults
       this.cancellationToken = cancellationToken;
     }
 
-    public override async Task ExecuteResultAsync(ActionContext context)
+    public MiddleManClientStreamingResult(IDataWriterAdapter responseAdapter, CancellationToken cancellationToken)
+    {
+      this.response = responseAdapter.Adapt();
+      this.cancellationToken = cancellationToken;
+    }
+
+    public async Task ApplyResultAsync(HttpContext context)
     {
       if (response == null) return;
 
-      var defaultResponseMetadata = new HttpResponseMetadata()
+      try
       {
-        Headers = new Dictionary<string, string?>()
+        var defaultResponseMetadata = new HttpResponseMetadata()
         {
-          ["Content-Type"] = "application/octet-stream",
-        },
-      };
+          Headers = new Dictionary<string, string?>()
+          {
+            ["Content-Type"] = "application/octet-stream",
+          },
+        };
 
-      var metadataLengthBytes = await response.EnumerateUntil(4, 0, cancellationToken);
-      var metadataLength = BitConverter.ToInt32(metadataLengthBytes.Received, 0);
+        var currentEnumeration = response;
 
-      // Read and apply metadata
-      if (metadataLength > 0)
-      {
-        var metadataBytes = await response.PrependItems(cancellationToken, metadataLengthBytes.CurrentEnumerationItem)
-          .EnumerateUntil(metadataLength, 0, cancellationToken);
-        
-        var metadataJson = System.Text.Encoding.UTF8.GetString(metadataBytes.Received, 0, metadataLength);
-        var responseMetadata = System.Text.Json.JsonSerializer.Deserialize<HttpResponseMetadata>(metadataJson) ?? defaultResponseMetadata;
+        var metadataLengthBytes = await currentEnumeration.EnumerateUntil(4, 0, cancellationToken);
+        currentEnumeration = metadataLengthBytes.Next;
 
-        responseMetadata.Apply(context.HttpContext.Response);
-        await context.HttpContext.Response.BodyWriter.WriteAsync(metadataBytes.CurrentEnumerationItem, cancellationToken);
-      }
-      else
-      {
-        defaultResponseMetadata.Apply(context.HttpContext.Response);
-      }
+        var metadataLength = BitConverter.ToInt32(metadataLengthBytes.Received, 0);
 
-      // Write the rest of the response body
-      await foreach (var chunk in response)
+        // Read and apply metadata
+        if (metadataLength > 0)
         {
-          await context.HttpContext.Response.BodyWriter.WriteAsync(chunk, cancellationToken);
+          var metadataBytes = await currentEnumeration.EnumerateUntil(metadataLength, 0, cancellationToken);
+          currentEnumeration = metadataBytes.Next;
+
+          var metadataJson = System.Text.Encoding.UTF8.GetString(metadataBytes.Received, 0, metadataLength);
+          var responseMetadata = System.Text.Json.JsonSerializer.Deserialize<HttpResponseMetadata>(metadataJson) ?? defaultResponseMetadata;
+
+          responseMetadata.Apply(context.Response);
+        }
+        else
+        {
+          defaultResponseMetadata.Apply(context.Response);
         }
 
-      await context.HttpContext.Response.BodyWriter.CompleteAsync();
+        // Write the rest of the response body
+        await foreach (var chunk in currentEnumeration)
+        {
+          await context.Response.BodyWriter.WriteAsync(chunk, cancellationToken);
+        }
+      }
+      finally
+      {
+        await context.Response.BodyWriter.CompleteAsync();
+        await context.Response.CompleteAsync();
+      }
     }
   }
 }

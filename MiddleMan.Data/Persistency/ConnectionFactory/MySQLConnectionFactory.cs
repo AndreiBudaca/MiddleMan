@@ -1,15 +1,15 @@
-﻿using Microsoft.Data.Sqlite;
 using System.Data;
+using MySql.Data.MySqlClient;
 
 namespace MiddleMan.Data.Persistency.ConnectionFactory
 {
-  public class SqliteConnectionFactory(string connectionString) : IDbConnectionFactory
+  public class MySQLConnectionFactory(string connectionString) : IDbConnectionFactory
   {
     private readonly string _connectionString = connectionString;
 
     public IDbConnection CreateConnection()
     {
-      return new SqliteConnection(_connectionString);
+      return new MySqlConnection(_connectionString);
     }
   }
 }

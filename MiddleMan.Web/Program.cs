@@ -39,15 +39,18 @@ namespace MiddleMan.Web
           options.JsonSerializerOptions.Converters.Add(new DateTimeConverter());
         }); ;
 
+      builder.Services.AddServices();
+      
       builder.Services.AddSignalR(options =>
       {
         options.StreamBufferCapacity = 1;
         options.MaximumReceiveMessageSize = ServerCapabilities.MaxContentLength * 2;
         options.MaximumParallelInvocationsPerClient = 10;
-        options.EnableDetailedErrors = true;
-      }).AddMessagePackProtocol();
-
-      builder.Services.AddServices();
+        options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+      })
+      .AddMessagePackProtocol()
+      .AddStackExchangeRedis(builder.Configuration.GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis) 
+        ?? throw new InvalidOperationException("Redis connection string is not configured."));
 
       builder.Services
         .AddAuthentication(o =>
@@ -59,14 +62,12 @@ namespace MiddleMan.Web
         .AddJWTAuthentication(builder.Configuration);
 
       builder.Services
-        .AddAuthorization(options =>
-        {
-          options.DefaultPolicy = new AuthorizationPolicyBuilder(
+        .AddAuthorizationBuilder()
+        .SetDefaultPolicy(new AuthorizationPolicyBuilder(
               JwtBearerDefaults.AuthenticationScheme,
               CookieAuthenticationDefaults.AuthenticationScheme)
             .RequireAuthenticatedUser()
-            .Build();
-        });
+            .Build());
 
       var app = builder.Build();
 
@@ -96,8 +97,6 @@ namespace MiddleMan.Web
       app.MapControllers();
 
       app.MapHubs();
-
-      app.InitializeDb();
 
       app.Run();
     }

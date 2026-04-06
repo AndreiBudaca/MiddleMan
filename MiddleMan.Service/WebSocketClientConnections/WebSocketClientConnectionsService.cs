@@ -1,91 +1,62 @@
 using MiddleMan.Data.InMemory;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
-using MiddleMan.Service.WebSocketClientConnections.ConnectionPicker;
 
 namespace MiddleMan.Service.WebSocketClientConnections
 {
   public class WebSocketClientConnectionsService(IInMemoryContext inMemoryContext) : IWebSocketClientConnectionsService
   {
-    private readonly IInMemoryContext inMemoryContext = inMemoryContext;
+    private readonly IInMemoryContext intanceInMemoryContext = inMemoryContext;
+    private const string WebSocketCapabilitesHashKey = "WebSocketClientCapabilities";
+    private static string WebSocketConnectionsKey(string identifier, string name) => $"WebSocketClientConnections:{identifier}:{name}";
 
-    public async Task<List<string>> GetConnectedWebSocketClientConnections(string identifier)
+    public bool ExistsWebSocketClientConnection(string identifier, string name)
     {
-      var existingConnections = await inMemoryContext.GetAllFromHash<ClientConnections>(WebSocketClientKey(identifier));
-      return [.. existingConnections.Keys];
+      var connectionCount = intanceInMemoryContext.ListCount(WebSocketConnectionsKey(identifier, name));
+      return connectionCount > 0;
     }
 
-    public async Task<bool> ExistsWebSocketClientConnection(string identifier, string name)
+    public int AddWebSocketClientConnection(string identifier, string name, string connectionId)
     {
-      var existingConnection = await inMemoryContext.GetFromHash<ClientConnections>(WebSocketClientKey(identifier), name);
-      return existingConnection?.ConnectionIds.Count > 0;
+      return intanceInMemoryContext.AddToList(WebSocketConnectionsKey(identifier, name), connectionId);
     }
 
-    public async Task AddWebSocketClientConnection(string identifier, string name, string connectionId)
+    public ClientConnection? GetWebSocketClientConnection(string identifier, string name)
     {
-      var existingConnection = await inMemoryContext.GetFromHash<ClientConnections>(WebSocketClientKey(identifier), name);
-      existingConnection ??= new ClientConnections
+      var clientConnection = intanceInMemoryContext.GetRandomFromList<string>(WebSocketConnectionsKey(identifier, name));
+
+      if (clientConnection == null)
       {
-        ConnectionIds = [],
-        Metadata = new ClientConnectionsMetadata
-        {
-          LastPickedIndex = 0,
-        }
-      };
+        return null;
+      }
 
-      existingConnection.ConnectionIds.Add(connectionId);
-      await inMemoryContext.AddToHash(WebSocketClientKey(identifier), name, existingConnection);
-    }
-
-    public async Task<ClientConnection> GetWebSocketClientConnection(string identifier, string name, IConnectionPickerStrategy? connectionPickerStrategy = null)
-    {
-      var existingConnection = await inMemoryContext.GetFromHash<ClientConnections>(WebSocketClientKey(identifier), name);
-      if (existingConnection == null || existingConnection.ConnectionIds.Count == 0) return new ClientConnection();
-
-      connectionPickerStrategy ??= IConnectionPickerStrategy.Default;
-      int indexToPick = connectionPickerStrategy.PickAndUpdate(existingConnection);
-      await inMemoryContext.AddToHash(WebSocketClientKey(identifier), name, existingConnection);
+      var capabilities = intanceInMemoryContext.GetFromHash<ClientCapabilities>(WebSocketCapabilitesHashKey, clientConnection) ??
+       new ClientCapabilities();
 
       return new ClientConnection
       {
-        ConnectionId = existingConnection.ConnectionIds[indexToPick],
-        ClientCapabilities = existingConnection.Metadata?.Capabilities ?? new ClientCapabilities(),
+        ConnectionId = clientConnection,
+        ClientCapabilities = capabilities ?? new ClientCapabilities(),
       };
     }
 
-    public async Task DeleteWebSocketClientConnection(string identifier, string namem, string connectionId)
+    public int DeleteWebSocketClientConnection(string identifier, string namem, string connectionId)
     {
-      var existingConnection = await inMemoryContext.GetFromHash<ClientConnections>(WebSocketClientKey(identifier), namem);
-      if (existingConnection == null) return;
+      return intanceInMemoryContext.RemoveFromList(WebSocketConnectionsKey(identifier, namem), connectionId);
+    }
 
-      existingConnection.ConnectionIds.Remove(connectionId);
-      if (existingConnection.ConnectionIds.Count == 0)
+    public void DeleteWebSocketClientConnection(string identifier, string name)
+    {
+      var connections = intanceInMemoryContext.GetAllFromList<string>(WebSocketConnectionsKey(identifier, name));
+      foreach (var connection in connections)
       {
-        await inMemoryContext.RemoveFromHash(WebSocketClientKey(identifier), namem);
-      }
-      else
-      {
-        await inMemoryContext.AddToHash(WebSocketClientKey(identifier), namem, existingConnection);
+        if (connection == null) continue;
+        intanceInMemoryContext.RemoveFromList(WebSocketConnectionsKey(identifier, name), connection);
       }
     }
 
-    public Task DeleteWebSocketClientConnection(string identifier, string name)
+    public void AddWebSockerClientConnectionCapabilities(string identifier, string name, string connectionId, ClientCapabilities capabilities)
     {
-      return inMemoryContext.RemoveFromHash(WebSocketClientKey(identifier), name);
-    }
-
-    private static string WebSocketClientKey(string identifier) => $"WebSocketClientConnections:{identifier}";
-
-    public async Task<bool> AddWebSockerClientConnectionCapabilities(string identifier, string name, ClientCapabilities capabilities)
-    {
-      var existingConnection = await inMemoryContext.GetFromHash<ClientConnections>(WebSocketClientKey(identifier), name);
-      existingConnection ??= new ClientConnections();
-      existingConnection.Metadata ??= new ClientConnectionsMetadata();
-
-      if (existingConnection.Metadata.Capabilities != null && !capabilities.Equals(existingConnection.Metadata.Capabilities)) return false;
-
-      existingConnection.Metadata.Capabilities = capabilities;
-      await inMemoryContext.AddToHash(WebSocketClientKey(identifier), name, existingConnection);
-      return true;
+      intanceInMemoryContext.AddToHash(WebSocketCapabilitesHashKey, connectionId, capabilities);
     }
   }
 }

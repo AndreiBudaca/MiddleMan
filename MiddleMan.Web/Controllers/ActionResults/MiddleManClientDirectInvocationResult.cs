@@ -1,9 +1,9 @@
-using Microsoft.AspNetCore.Mvc;
 using MiddleMan.Web.Communication.ClientContracts;
+using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Controllers.ActionResults
 {
-public class MiddleManClientDirectInvocationResult : ActionResult
+public class MiddleManClientDirectInvocationResult : IControllerDefinedResult
   {
     private readonly DirectInvocationResponse? response;
     private readonly CancellationToken cancellationToken = CancellationToken.None;
@@ -16,12 +16,20 @@ public class MiddleManClientDirectInvocationResult : ActionResult
       this.cancellationToken = cancellationToken;
     }
 
-    public override async Task ExecuteResultAsync(ActionContext context)
+    public async Task ApplyResultAsync(HttpContext context)
     {
-      response?.Metadata?.Apply(context.HttpContext.Response);
+      var metadata = response?.Metadata ?? new HttpResponseMetadata
+      {
+        Headers = new Dictionary<string, string?>()
+        {
+          ["Content-Type"] = "application/octet-stream",
+        },
+      };
 
-      await context.HttpContext.Response.BodyWriter.WriteAsync(response?.Data ?? [], cancellationToken);
-      await context.HttpContext.Response.BodyWriter.CompleteAsync();
+      metadata.Apply(context.Response);
+
+      await context.Response.BodyWriter.WriteAsync(response?.Data ?? [], cancellationToken);
+      await context.Response.BodyWriter.CompleteAsync();
     }
   }
 }

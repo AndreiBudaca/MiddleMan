@@ -5,8 +5,9 @@ using MiddleMan.Service.Blobs;
 using MiddleMan.Service.WebSocketClientMethods;
 using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClients;
-using MiddleMan.Web.Communication;
 using MiddleMan.Core;
+using MiddleMan.Communication;
+using MiddleMan.Communication.Channels;
 
 namespace MiddleMan.Web.Infrastructure.Configuration
 {
@@ -16,27 +17,29 @@ namespace MiddleMan.Web.Infrastructure.Configuration
     {
       // Add DB context
       services.AddSingleton<IInMemoryContext, PureInMemoryContext>();
-      services.AddSingleton<ISharedInMemoryContext, RedisContext>(service =>
-        new RedisContext(service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis)!));
-      services.AddScoped<IDbConnectionFactory, SqliteConnectionFactory>(service => 
-        new SqliteConnectionFactory(service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Sqlite)!));
+      services.AddScoped<IDbConnectionFactory, MySQLConnectionFactory>(service => 
+        new MySQLConnectionFactory(service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.MySql)!));
 
-      // Add services
+      // Repositories
       services.AddScoped<IClientRepository, ClientRepository>();
+      
+      // Add services
       services.AddScoped<IBlobService, LocalFileSystemBlobService>();
       services.AddScoped<IWebSocketClientsService, WebSocketClientsService>();
       services.AddScoped<IWebSocketClientMethodService, WebSocketClientMethodService>();
       services.AddScoped<IWebSocketClientConnectionsService, WebSocketClientConnectionsService>();
 
-      // Add communication hub
-      services.AddSingleton<StreamingCommunicationManager>();
-    }
+      // Add cummunication channels
+      services.AddSingleton<ICommunicationChannel, RedisCommunicationChannel>(service =>
+        new RedisCommunicationChannel(
+          service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis)!,
+          service.GetRequiredService<IInMemoryContext>())
+      );
 
-    public static void InitializeDb(this WebApplication app)
-    {
-      using var scope = app.Services.CreateScope();
-      var dbConnectionFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
-      SqliteDatabaseInitializer.Initialize(dbConnectionFactory);
+      // Add communication hubs
+      services.AddScoped<StreamingCommunicationManager>();
+      services.AddScoped<IntraServerCommunicationManager>();
+      services.AddScoped<ClientInfoCommunicationManager>();
     }
   }
 }
