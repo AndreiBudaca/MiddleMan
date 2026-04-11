@@ -70,6 +70,8 @@ namespace MiddleMan.Web.Controllers.WebSockets
 
       var capabilities = onInstanceClientConnection?.ClientCapabilities ?? externalClientConnection?.ClientCapabilities ?? new ClientCapabilities();
 
+      logger.LogInformation("Invoking {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", webSocketClientName, method, connectionId);
+      
       IClientInvoker invoker = capabilities.SupportsStreaming ?
         new StreamInvoker(intraServerCommunicationManager, streamingCommunicationManager, logger) :
         new DirectClientInvoker(logger);
@@ -77,6 +79,8 @@ namespace MiddleMan.Web.Controllers.WebSockets
       var result = await invoker.Invoke(HttpContext, method, onInstanceClientConnection ?? externalClientConnection!, onInstanceClientConnection != null, hubClient, cancellationToken);
       await result.ApplyResultAsync(HttpContext);
       await invoker.Cleanup();
+
+      logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", webSocketClientName, method, connectionId);
     }
 
     private async Task<ClientConnection?> GetExternalClientConnection(string webSocketClientName)

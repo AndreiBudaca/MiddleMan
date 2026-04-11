@@ -24,6 +24,7 @@ namespace MiddleMan.Web.Communication.ClientInvocator
         return new StatusResult(StatusCodes.Status413PayloadTooLarge);
       }
 
+      logger.LogInformation("Starting direct invocation. Method: {Method}, IsSameServerConnection: {IsSameServerConnection}", method, isSameServerConnection);
       try
       {
         var communicationManager = new DirectInvocationCommunicationManager(httpContext.Request, new HttpUser

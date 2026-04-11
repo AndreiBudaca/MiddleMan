@@ -31,6 +31,7 @@ namespace MiddleMan.Web.Communication.ClientInvocator
         Identifier = httpContext.User.Identifier(),
       }, webSocketClientConnection.ClientCapabilities.SendHTTPMetadata);
 
+      logger.LogInformation("Starting stream invocation. Correlation ID: {CorrelationId}, Method: {Method}, IsSameServerConnection: {IsSameServerConnection}", correlation, method, isSameServerConnection);
       try
       {
         await intraServerCommunicationManager.RegisterRequestSession(correlation, isSameServerConnection);

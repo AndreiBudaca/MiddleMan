@@ -18,7 +18,8 @@ namespace MiddleMan.Web.Hubs
     StreamingCommunicationManager communicationManager,
     ClientInfoCommunicationManager clientInfoCommunicationManager,
     IntraServerCommunicationManager intraServerCommunicationManager,
-    IWebSocketClientConnectionsService webSocketClientConnectionsService) : Hub
+    IWebSocketClientConnectionsService webSocketClientConnectionsService,
+    ILogger<PlaygroundHub> logger) : Hub
   {
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
     private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
@@ -26,6 +27,7 @@ namespace MiddleMan.Web.Hubs
     private readonly ClientInfoCommunicationManager clientInfoCommunicationManager = clientInfoCommunicationManager;
     private readonly IntraServerCommunicationManager intraServerCommunicationManager = intraServerCommunicationManager;
     private readonly StreamingCommunicationManager communicationManager = communicationManager;
+    private readonly ILogger<PlaygroundHub> logger = logger;
 
     #region [Clinet connection hooks]
     public override async Task OnConnectedAsync()
@@ -46,6 +48,8 @@ namespace MiddleMan.Web.Hubs
       {
         await clientInfoCommunicationManager.StartListening(id, name);
       }
+
+      logger.LogInformation("Client connected: {Id} - {Name}. Assigning connection ID: {ConnectionId}. Total connections: {TotalConnections}", id, name, Context.ConnectionId, onServerConnectionCount);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
@@ -58,6 +62,8 @@ namespace MiddleMan.Web.Hubs
       {
         await clientInfoCommunicationManager.StopListening(id, name);
       }
+
+      logger.LogInformation("Client disconnected: {Id} - {Name}. Connection ID: {ConnectionId}. Total connections: {TotalConnections}", id, name, Context.ConnectionId, onServerConnectionCount);
     }
 
     private async Task<bool> AuthorizeClient(string id, string name, string? clientToken)
