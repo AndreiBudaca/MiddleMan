@@ -1,62 +1,119 @@
 using MiddleMan.Data.InMemory;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
+using MiddleMan.Service.WebSocketClientConnections.LoadBalancing;
 
 namespace MiddleMan.Service.WebSocketClientConnections
 {
   public class WebSocketClientConnectionsService(IInMemoryContext inMemoryContext) : IWebSocketClientConnectionsService
   {
-    private readonly IInMemoryContext intanceInMemoryContext = inMemoryContext;
-    private const string WebSocketCapabilitesHashKey = "WebSocketClientCapabilities";
-    private static string WebSocketConnectionsKey(string identifier, string name) => $"WebSocketClientConnections:{identifier}:{name}";
+    private readonly IInMemoryContext instanceInMemoryContext = inMemoryContext;
+    private readonly IClientConnectionLoadBalancer loadBalancer = new RoundRobinClientLoadBalancer();
+    private static readonly object globalLock = new();
 
-    public bool ExistsWebSocketClientConnection(string identifier, string name)
+    private static string WebSocketConnectionsKey(string identifier) => $"WebSocketClientConnections:{identifier}";
+
+    public bool ExistsWebSocketClientConnection(string identifier, string name, string clientId)
     {
-      var connectionCount = intanceInMemoryContext.ListCount(WebSocketConnectionsKey(identifier, name));
-      return connectionCount > 0;
+      lock (globalLock)
+      {
+        var clientConnections = instanceInMemoryContext.GetFromHash<ClientConnections>(WebSocketConnectionsKey(identifier), name);
+        return clientConnections?.ConnectionsMetadata.ContainsKey(clientId) ?? false;
+      }
     }
 
-    public int AddWebSocketClientConnection(string identifier, string name, string connectionId)
+    public int AddWebSocketClientConnection(string identifier, string name, string clientId, string connectionId)
     {
-      return intanceInMemoryContext.AddToList(WebSocketConnectionsKey(identifier, name), connectionId);
+      lock (globalLock)
+      {
+        var clientConnections = instanceInMemoryContext.GetFromHash<ClientConnections>(WebSocketConnectionsKey(identifier), name);
+
+        if (clientConnections == null)
+        {
+          clientConnections = new ClientConnections
+          {
+            ConnectionsMetadata = new Dictionary<string, ClientConnectionsMetadata>
+            {
+              [clientId] = new ClientConnectionsMetadata
+              {
+                ConnectionId = connectionId,
+              }
+            }
+          };
+
+          instanceInMemoryContext.AddToHash(WebSocketConnectionsKey(identifier), name, clientConnections);
+          return 1;
+        }
+
+        if (clientConnections.ConnectionsMetadata.TryGetValue(clientId, out ClientConnectionsMetadata? value))
+        {
+          value.ConnectionId = connectionId;
+          value.Capabilities = null;
+        }
+        else
+        {
+          clientConnections.ConnectionsMetadata.Add(clientId, new ClientConnectionsMetadata
+          {
+            ConnectionId = connectionId,
+          });
+        }
+        return clientConnections.ConnectionsMetadata.Count;
+      }
     }
 
     public ClientConnection? GetWebSocketClientConnection(string identifier, string name)
     {
-      var clientConnection = intanceInMemoryContext.GetRandomFromList<string>(WebSocketConnectionsKey(identifier, name));
-
-      if (clientConnection == null)
+      lock (globalLock)
       {
-        return null;
+        var clientConnections = instanceInMemoryContext.GetFromHash<ClientConnections>(WebSocketConnectionsKey(identifier), name);
+        if (clientConnections == null) return null;
+
+        var loadBalancingMetadata = clientConnections.LoadBalancingMetadata;
+
+        var selectedConnection = loadBalancer.PickClientConnection(clientConnections);
+        if (selectedConnection == null) return null;
+
+        return new ClientConnection
+        {
+          ConnectionId = selectedConnection.ConnectionId,
+          ClientCapabilities = selectedConnection.Capabilities ?? new()
+        };
       }
-
-      var capabilities = intanceInMemoryContext.GetFromHash<ClientCapabilities>(WebSocketCapabilitesHashKey, clientConnection) ??
-       new ClientCapabilities();
-
-      return new ClientConnection
-      {
-        ConnectionId = clientConnection,
-        ClientCapabilities = capabilities ?? new ClientCapabilities(),
-      };
     }
 
-    public int DeleteWebSocketClientConnection(string identifier, string namem, string connectionId)
+    public int DeleteWebSocketClientConnection(string identifier, string name, string clientId)
     {
-      return intanceInMemoryContext.RemoveFromList(WebSocketConnectionsKey(identifier, namem), connectionId);
+      lock (globalLock)
+      {
+        var clientConnections = instanceInMemoryContext.GetFromHash<ClientConnections>(WebSocketConnectionsKey(identifier), name);
+        if (clientConnections == null) return 0;
+
+        if (!clientConnections.ConnectionsMetadata.ContainsKey(clientId)) return clientConnections.ConnectionsMetadata.Count;
+
+        clientConnections.ConnectionsMetadata.Remove(clientId);
+        return clientConnections.ConnectionsMetadata.Count;
+      }
     }
 
     public void DeleteWebSocketClientConnection(string identifier, string name)
     {
-      var connections = intanceInMemoryContext.GetAllFromList<string>(WebSocketConnectionsKey(identifier, name));
-      foreach (var connection in connections)
+      lock (globalLock)
       {
-        if (connection == null) continue;
-        intanceInMemoryContext.RemoveFromList(WebSocketConnectionsKey(identifier, name), connection);
+        instanceInMemoryContext.RemoveFromHash(WebSocketConnectionsKey(identifier), name);
       }
     }
 
-    public void AddWebSockerClientConnectionCapabilities(string identifier, string name, string connectionId, ClientCapabilities capabilities)
+    public void AddWebSockerClientConnectionCapabilities(string identifier, string name, string clientId, ClientCapabilities capabilities)
     {
-      intanceInMemoryContext.AddToHash(WebSocketCapabilitesHashKey, connectionId, capabilities);
+      lock (globalLock)
+      {
+        var clientConnections = instanceInMemoryContext.GetFromHash<ClientConnections>(WebSocketConnectionsKey(identifier), name);
+        if (clientConnections == null) return;
+
+        var connection = clientConnections.ConnectionsMetadata.GetValueOrDefault(clientId);
+        if (connection == null) return;
+
+        connection.Capabilities = capabilities;
+      }
     }
   }
 }

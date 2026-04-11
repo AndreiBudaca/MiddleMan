@@ -32,9 +32,14 @@ namespace MiddleMan.Web.Hubs
     #region [Clinet connection hooks]
     public override async Task OnConnectedAsync()
     {
-      var id = Context.User!.Identifier();
-      var name = Context.User!.Name();
-      var clientToken = Context.GetHttpContext()?.Request.Headers.Authorization.FirstOrDefault();
+      var (id, name, clientToken, clientId) = GetClientInfoFromContext();
+
+      if (string.IsNullOrWhiteSpace(clientId))
+      {
+        logger.LogWarning("Client connection attempt without client identity header. Connection ID: {ConnectionId}", Context.ConnectionId);
+        Context.Abort();
+        return;
+      }
 
       var isAuthorized = await AuthorizeClient(id, name, clientToken);
       if (!isAuthorized)
@@ -43,7 +48,7 @@ namespace MiddleMan.Web.Hubs
         return;
       }
 
-      var onServerConnectionCount = webSocketClientConnectionsService.AddWebSocketClientConnection(id, name, Context.ConnectionId);
+      var onServerConnectionCount = webSocketClientConnectionsService.AddWebSocketClientConnection(id, name, clientId, Context.ConnectionId);
       if (onServerConnectionCount == 1)
       {
         await clientInfoCommunicationManager.StartListening(id, name);
@@ -54,10 +59,15 @@ namespace MiddleMan.Web.Hubs
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-      var id = Context.User!.Identifier();
-      var name = Context.User!.Name();
+      var (id, name, _, clientId) = GetClientInfoFromContext();
 
-      var onServerConnectionCount = webSocketClientConnectionsService.DeleteWebSocketClientConnection(id, name, Context.ConnectionId);
+      if (string.IsNullOrWhiteSpace(clientId))
+      {
+        logger.LogWarning("Client disconnection without client identity header. Connection ID: {ConnectionId}", Context.ConnectionId);
+        return;
+      }
+
+      var onServerConnectionCount = webSocketClientConnectionsService.DeleteWebSocketClientConnection(id, name, clientId);
       if (onServerConnectionCount == 0)
       {
         await clientInfoCommunicationManager.StopListening(id, name);
@@ -76,19 +86,17 @@ namespace MiddleMan.Web.Hubs
     #region [Server info methods]
     public async Task Methods(ChannelReader<byte[]> channelReader)
     {
-      var id = Context.User!.Identifier();
-      var name = Context.User!.Name();
+      var (id, name, _, clientId) = GetClientInfoFromContext();
 
-      await ConnectionChecks(id, name);
+      await ConnectionChecks(id, name, clientId);
 
       await webSocketClientMethodService.ReceiveMethodsAsync(id, name, channelReader.ReadAllAsync(), CancellationToken.None);
     }
 
     public async Task<ServerInfoModel> Negociate(ClientInfoModel clientInfo)
     {
-      var id = Context.User!.Identifier();
-      var name = Context.User!.Name();
-      await ConnectionChecks(id, name);
+      var (id, name, _, clientId) = GetClientInfoFromContext();
+      await ConnectionChecks(id, name, clientId);
 
       if (clientInfo == null) return new ServerInfoModel { IsAccepted = false };
       if (!ServerCapabilities.AllowedVersions.Contains(clientInfo.Version)) return new ServerInfoModel { IsAccepted = false };
@@ -96,7 +104,7 @@ namespace MiddleMan.Web.Hubs
       webSocketClientConnectionsService.AddWebSockerClientConnectionCapabilities(
         id,
         name,
-        Context.ConnectionId,
+        clientId!,
         new ClientCapabilities
         {
           Version = clientInfo.Version,
@@ -118,9 +126,8 @@ namespace MiddleMan.Web.Hubs
     #region [Communication methods]
     public async Task AddReadChannel(Guid correlation, ChannelReader<byte[]> channelReader)
     {
-      var id = Context.User!.Identifier();
-      var name = Context.User!.Name();
-      await ConnectionChecks(id, name);
+      var (id, name, _, clientId) = GetClientInfoFromContext();
+      await ConnectionChecks(id, name, clientId);
 
       var sameServerInvocation = intraServerCommunicationManager.ExistsRequestSession(correlation);
       await communicationManager.RegisterSessionReaderChannelAsync(channelReader, correlation, sameServerInvocation);
@@ -143,9 +150,8 @@ namespace MiddleMan.Web.Hubs
 
     public async Task<ChannelReader<byte[]>> SubscribeToServer(Guid correlation)
     {
-      var id = Context.User!.Identifier();
-      var name = Context.User!.Name();
-      await ConnectionChecks(id, name);
+      var (id, name, _, clientId) = GetClientInfoFromContext();
+      await ConnectionChecks(id, name, clientId);
 
       var channel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(1));
       await communicationManager.RegisterSessionWriterChannelAsync(channel.Writer, correlation);
@@ -155,14 +161,31 @@ namespace MiddleMan.Web.Hubs
     #endregion
 
     // TO DO: Refactor this to a hub filter
-    private async Task ConnectionChecks(string id, string name)
+    private async Task ConnectionChecks(string id, string name, string? clientId)
     {
-      var clientConectionExists = webSocketClientConnectionsService.ExistsWebSocketClientConnection(id, name);
+      if (string.IsNullOrWhiteSpace(clientId))
+      {
+        logger.LogWarning("Client method invocation attempt without client identity header. Connection ID: {ConnectionId}", Context.ConnectionId);
+        Context.Abort();
+        return;
+      }
+
+      var clientConectionExists = webSocketClientConnectionsService.ExistsWebSocketClientConnection(id, name, clientId);
 
       if (!clientConectionExists)
       {
         Context.Abort();
       }
+    }
+
+    private (string, string, string?, string?) GetClientInfoFromContext()
+    {
+      var id = Context.User!.Identifier();
+      var name = Context.User!.Name();
+      var clientToken = Context.GetHttpContext()?.Request.Headers.Authorization.FirstOrDefault();
+      var clientId = Context.GetHttpContext()?.Request.Headers["X-Client-Identity"].FirstOrDefault();
+
+      return (id, name, clientToken, clientId);
     }
   }
 }
