@@ -8,6 +8,7 @@ using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Core;
 using MiddleMan.Communication;
 using MiddleMan.Communication.Channels;
+using MiddleMan.Service.Blobs.OracleObjectStorage;
 
 namespace MiddleMan.Web.Infrastructure.Configuration
 {
@@ -24,7 +25,18 @@ namespace MiddleMan.Web.Infrastructure.Configuration
       services.AddScoped<IClientRepository, ClientRepository>();
       
       // Add services
-      services.AddScoped<IBlobService, LocalFileSystemBlobService>();
+      services.AddScoped(service =>
+        new OracleObjectStorageClientConfigurator(
+          service.GetRequiredService<IConfiguration>().GetValue<string>(ConfigurationConstants.OracleCloud.User)!,
+          service.GetRequiredService<IConfiguration>().GetValue<string>(ConfigurationConstants.OracleCloud.Fingerprint)!,
+          service.GetRequiredService<IConfiguration>().GetValue<string>(ConfigurationConstants.OracleCloud.Tenancy)!,
+          service.GetRequiredService<IConfiguration>().GetValue<string>(ConfigurationConstants.OracleCloud.Region)!,
+          service.GetRequiredService<IConfiguration>().GetValue<string>(ConfigurationConstants.OracleCloud.KeyFile)!,
+          service.GetRequiredService<IConfiguration>().GetValue<string>(ConfigurationConstants.OracleCloud.Namespace)!,
+          service.GetRequiredService<IConfiguration>().GetValue<string>(ConfigurationConstants.OracleCloud.Bucket)!
+        )
+      );
+      services.AddScoped<IBlobService, OracleObjectStorageBlobService>();
       services.AddScoped<IWebSocketClientsService, WebSocketClientsService>();
       services.AddScoped<IWebSocketClientMethodService, WebSocketClientMethodService>();
       services.AddScoped<IWebSocketClientConnectionsService, WebSocketClientConnectionsService>();

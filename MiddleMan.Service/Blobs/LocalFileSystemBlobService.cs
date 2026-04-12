@@ -1,35 +1,35 @@
-﻿using MiddleMan.Service.Blobs.Dto;
+﻿using MiddleMan.Core;
 
 namespace MiddleMan.Service.Blobs
 {
   public class LocalFileSystemBlobService() : IBlobService
   {
-    private const int BufferSize = 4096;
-
-    public async Task<BlobInfoDto> UploadBlob(string container, string blob, IAsyncEnumerable<byte[]> dataChunks, CancellationToken cancellationToken)
+    public async Task<string> UploadBlob(string[] blobParts, IAsyncEnumerable<byte[]> dataChunks, CancellationToken cancellationToken)
     {
-      var filePath = Path.Combine(container, blob);
+      var blobPath = string.Join(Path.DirectorySeparatorChar, blobParts);
+      var filePath = Path.Combine(ServerCapabilities.StaticFilesPath, blobPath);
 
-      using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, BufferSize, useAsync: true);
+      using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, ServerCapabilities.MaxContentLength, useAsync: true);
 
       await foreach (var b in dataChunks.WithCancellation(cancellationToken))
       {
         await fileStream.WriteAsync(b.AsMemory(0, b.Length), cancellationToken);
       }
 
-      return new BlobInfoDto
-      {
-        AbsoluteUrl = $"{container}/{blob}",
-        RelativeUrl = blob,
-      };
+      return blobPath;
     }
 
-    public Task DeleteBlob(string container, string blob)
+    public Task DeleteBlob(string relativeUrl)
     {
-      var filePath = Path.Combine(container, blob);
+      var filePath = Path.Combine(ServerCapabilities.StaticFilesPath, relativeUrl);
       File.Delete(filePath);
 
       return Task.CompletedTask;
+    }
+
+    public Task<string> GetAbsoluteUrl(string relativeUrl)
+    {
+      return Task.FromResult($"{ServerCapabilities.StaticFilesPath}/{relativeUrl}".Replace(Path.DirectorySeparatorChar, '/'));
     }
   }
 }

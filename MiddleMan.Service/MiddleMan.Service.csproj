@@ -11,4 +11,8 @@
     <ProjectReference Include="..\MiddleMan.Data\MiddleMan.Data.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="OCI.DotNetSDK.Objectstorage" Version="131.0.0" />
+  </ItemGroup>
+
 </Project>

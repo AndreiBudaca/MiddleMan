@@ -24,12 +24,12 @@ namespace MiddleMan.Service.WebSocketClientMethods
       if (!ServerCapabilities.AllowedVersions.Contains(metadata.Version)) throw new NotSupportedException($"Version {metadata.Version} is not supported.");
       if (metadata.Operation == MethodPackConstants.Operations.OK) return;
 
-      var newFileInfo = await _blobService.UploadBlob(ServerCapabilities.StaticFilesPath, $"websocket-client-methods{Path.DirectorySeparatorChar}{identifier}_{name}_methods_{Guid.NewGuid()}.bin",
-        enumerationResult.Next, cancellationToken);
+      var blobRelativeUrl = await _blobService.UploadBlob(["websocket-client-methods", $"{identifier}_{name}_methods_{Guid.NewGuid()}.bin"], 
+        enumerationResult.Next.PrependItems(enumerationResult.Received, cancellationToken), cancellationToken);
 
       if (client?.MethodInfoUrl is not null)
       {
-        await _blobService.DeleteBlob(ServerCapabilities.StaticFilesPath, client.MethodInfoUrl);
+        await _blobService.DeleteBlob(client.MethodInfoUrl);
       }
 
       await _clientRepository.UpdateAsync((identifier, name),
@@ -42,7 +42,7 @@ namespace MiddleMan.Service.WebSocketClientMethods
            new ColumnInfo
           {
             ColumnName = Client.Columns.MethodInfoUrl,
-            Value = newFileInfo.RelativeUrl,
+            Value = blobRelativeUrl,
           },
         ]);
     }

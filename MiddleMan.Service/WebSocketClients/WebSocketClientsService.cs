@@ -1,16 +1,16 @@
 ﻿using MiddleMan.Data.Persistency;
 using MiddleMan.Data.Persistency.Classes;
 using MiddleMan.Data.Persistency.Entities;
-using MiddleMan.Service.WebSocketClientConnections;
+using MiddleMan.Service.Blobs;
 using MiddleMan.Service.WebSocketClients.Dto;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace MiddleMan.Service.WebSocketClients
 {
-  public class WebSocketClientsService(IClientRepository clientRepository, IWebSocketClientConnectionsService webSocketClientConnectionsService) : IWebSocketClientsService
+  public class WebSocketClientsService(IClientRepository clientRepository, IBlobService blobService) : IWebSocketClientsService
   {
-    private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
+    private readonly IBlobService blobService = blobService;
     private readonly IClientRepository clientRepository = clientRepository;
 
     public async Task<WebSocketClientDto> AddWebSocketClient(NewWebSockerClientDto newClient)
@@ -23,7 +23,7 @@ namespace MiddleMan.Service.WebSocketClients
 
       await clientRepository.AddAsync(client);
 
-      return BuildDto(client);
+      return await BuildDto(client);
     }
 
     public Task<bool> ExistsWebSocketClients(string identifier, string name)
@@ -39,7 +39,7 @@ namespace MiddleMan.Service.WebSocketClients
 
       // TO DO - return only instance connected clients
       var isConnected = false;
-      return BuildDto(clientData, isConnected);
+      return await BuildDto(clientData, isConnected);
     }
 
     public async Task<IEnumerable<WebSocketClientDto>> GetWebSocketClients(string identifier)
@@ -58,7 +58,7 @@ namespace MiddleMan.Service.WebSocketClients
       {
         // TO DO - return only instance connected clients
         var isConnected = false;;
-        clients.Add(BuildDto(client, isConnected));
+        clients.Add(await BuildDto(client, isConnected));
       }
 
       return clients;
@@ -101,13 +101,14 @@ namespace MiddleMan.Service.WebSocketClients
       return tokenHash.SequenceEqual(client.TokenHash);
     }
 
-    private static WebSocketClientDto BuildDto(Client client, bool isConnected = false)
+    private async Task<WebSocketClientDto> BuildDto(Client client, bool isConnected = false)
     {
+      var methodsUrl = string.IsNullOrWhiteSpace(client.MethodInfoUrl) ? null : await blobService.GetAbsoluteUrl(client.MethodInfoUrl);
       return new WebSocketClientDto
       {
         Name = client.Name,
         IsConnected = isConnected,
-        MethodsUrl = client.MethodInfoUrl,
+        MethodsUrl = methodsUrl,
         Signature = client.Signatures,
         TokenHash = client.TokenHash,
       };

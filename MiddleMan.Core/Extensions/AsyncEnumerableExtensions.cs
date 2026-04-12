@@ -87,5 +87,10 @@ namespace MiddleMan.Core.Extensions
         await enumerator.DisposeAsync();
       }
     }
+
+    public static IAsyncEnumerable<T[]> PrependItems<T>(this IAsyncEnumerable<T[]> enumerable, T[] item, CancellationToken cancellationToken)
+    {
+      return enumerable.GetAsyncEnumerator(cancellationToken).PrependItems(item, cancellationToken);
+    }
   }
 }
