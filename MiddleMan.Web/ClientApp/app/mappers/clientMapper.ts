@@ -1,5 +1,5 @@
 import type { TreeViewBaseItem } from "@mui/x-tree-view";
-import type { ClientWithMethods } from "~/contracts/client";
+import type { ClientConnectionStatus, ClientWithMethods } from "~/contracts/client";
 
 export interface TreeNode {
   label: string;
@@ -8,7 +8,8 @@ export interface TreeNode {
 }
 
 export function mapToTreeNodes(
-  clients: ClientWithMethods[]
+  clients: ClientWithMethods[],
+  clientsConnectionStatus: ClientConnectionStatus[]
 ): TreeViewBaseItem[] {
   const mapNode = (
     node: TreeNode,
@@ -24,9 +25,12 @@ export function mapToTreeNodes(
 
   return clients
     .map((c) => {
+      const connectionStatus = clientsConnectionStatus.find(s => s.name == c.name);
+      const isConnected = connectionStatus ? connectionStatus.isConnected : false;
+      
       return {
         label: c.name,
-        labelSufix: c.isConnected ? "online" : "offline",
+        labelSufix: isConnected ? "online" : "offline",
         children: c.methods.map((m) => {
           return {
             label: m.name,

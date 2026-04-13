@@ -23,7 +23,7 @@ namespace MiddleMan.Web.Communication.ClientInvocator
       return intraServerCommunicationManager.ClearRequestSession(correlation);
     }
 
-    public async Task<IControllerDefinedResult> Invoke(HttpContext httpContext, string method, ClientConnection webSocketClientConnection, bool isSameServerConnection,
+    public async Task<IControllerDefinedResult> Invoke(HttpContext httpContext, string method, ClientConnection webSocketClientConnection,
      ISingleClientProxy hubClient, CancellationToken cancellationToken)
     {
       var adapter = new HttpRequestAdapter(httpContext.Request, new HttpUser
@@ -31,13 +31,13 @@ namespace MiddleMan.Web.Communication.ClientInvocator
         Identifier = httpContext.User.Identifier(),
       }, webSocketClientConnection.ClientCapabilities.SendHTTPMetadata);
 
-      logger.LogInformation("Starting stream invocation. Correlation ID: {CorrelationId}, Method: {Method}, IsSameServerConnection: {IsSameServerConnection}", correlation, method, isSameServerConnection);
+      logger.LogInformation("Starting stream invocation. Correlation ID: {CorrelationId}, Method: {Method}, IsSameServerConnection: {IsSameServerConnection}", correlation, method, webSocketClientConnection.SameServerConnection);
       try
       {
-        await intraServerCommunicationManager.RegisterRequestSession(correlation, isSameServerConnection);
+        await intraServerCommunicationManager.RegisterRequestSession(correlation, webSocketClientConnection.SameServerConnection);
         await hubClient.SendAsync(method, correlation, cancellationToken);
 
-        return isSameServerConnection ?
+        return webSocketClientConnection.SameServerConnection ?
           await SameServerStreamInvocation(correlation, adapter, cancellationToken) :
           await IntraServerStreamInvocation(correlation, adapter, cancellationToken);
       }

@@ -1,6 +1,7 @@
 using MiddleMan.Communication.Channels;
 using MiddleMan.Communication.Constants;
 using MiddleMan.Communication.Messages;
+using MiddleMan.Core;
 using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
 
@@ -35,12 +36,25 @@ namespace MiddleMan.Communication
 
     public async Task<ClientConnection?> QueryClientConnection(string identifier, string name, CancellationToken cancellationToken = default)
     {
-      var queryKey = Guid.NewGuid().ToString();
-      var responseTask = await communicationChannel.PeekChannelAsync<ClientConnection>(ClientInfoConnectionResponseChannelKey(identifier, name, queryKey), cancellationToken);
-      await communicationChannel.PublishAsync(ClientInfoQueryChannelKey(identifier, name), new ClientQuery { Query = ClientInfoQueries.ConnectionId, RespondTo = queryKey });
-      
-      var response = await responseTask;
-      return response;
+      using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+      cts.CancelAfter(TimeSpan.FromSeconds(ServerCapabilities.ClientConnectionTimeoutSeconds));
+
+      try
+      {
+        var queryKey = Guid.NewGuid().ToString();
+        var responseTask = await communicationChannel.PeekChannelAsync<ClientConnection>(ClientInfoConnectionResponseChannelKey(identifier, name, queryKey), cts.Token);
+        await communicationChannel.PublishAsync(ClientInfoQueryChannelKey(identifier, name), new ClientQuery { Query = ClientInfoQueries.ConnectionId, RespondTo = queryKey });
+
+        var response = await responseTask;
+        if (response == null) return null;
+
+        response.SameServerConnection = false;
+        return response;
+      }
+      catch (OperationCanceledException) when (cts.IsCancellationRequested)
+      {
+        return null;
+      }
     }
 
     private static string ClientInfoQueryChannelKey(string identifier, string name) => $"client-info-query:{identifier}:{name}";

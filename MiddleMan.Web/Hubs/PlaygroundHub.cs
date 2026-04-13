@@ -49,7 +49,7 @@ namespace MiddleMan.Web.Hubs
       }
 
       var onServerConnectionCount = webSocketClientConnectionsService.AddWebSocketClientConnection(id, name, clientId, Context.ConnectionId);
-      if (onServerConnectionCount == 1)
+      if (onServerConnectionCount == 1 && ServerCapabilities.ClusterMode)
       {
         await clientInfoCommunicationManager.StartListening(id, name);
       }
@@ -68,7 +68,7 @@ namespace MiddleMan.Web.Hubs
       }
 
       var onServerConnectionCount = webSocketClientConnectionsService.DeleteWebSocketClientConnection(id, name, clientId);
-      if (onServerConnectionCount == 0)
+      if (onServerConnectionCount == 0 && ServerCapabilities.ClusterMode)
       {
         await clientInfoCommunicationManager.StopListening(id, name);
       }

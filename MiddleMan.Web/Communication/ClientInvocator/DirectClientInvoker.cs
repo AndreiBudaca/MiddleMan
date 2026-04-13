@@ -16,7 +16,7 @@ namespace MiddleMan.Web.Communication.ClientInvocator
       return Task.CompletedTask;
     }
 
-    public async Task<IControllerDefinedResult> Invoke(HttpContext httpContext, string method, ClientConnection webSocketClientConnection, bool isSameServerConnection,
+    public async Task<IControllerDefinedResult> Invoke(HttpContext httpContext, string method, ClientConnection webSocketClientConnection,
      ISingleClientProxy hubClient, CancellationToken cancellationToken)
     {
       if (httpContext.Request.ContentLength > ServerCapabilities.MaxContentLength)
@@ -24,7 +24,7 @@ namespace MiddleMan.Web.Communication.ClientInvocator
         return new StatusResult(StatusCodes.Status413PayloadTooLarge);
       }
 
-      logger.LogInformation("Starting direct invocation. Method: {Method}, IsSameServerConnection: {IsSameServerConnection}", method, isSameServerConnection);
+      logger.LogInformation("Starting direct invocation. Method: {Method}, IsSameServerConnection: {IsSameServerConnection}", method, webSocketClientConnection.SameServerConnection);
       try
       {
         var communicationManager = new DirectInvocationCommunicationManager(httpContext.Request, new HttpUser

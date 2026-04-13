@@ -10,6 +10,8 @@
 
     public const int ClientConnectionTimeoutSeconds = 5;
 
+    public const bool ClusterMode = true;
+
     public static readonly int[] AllowedVersions = [0];
 
     public static string StaticFilesPath => Environment.GetEnvironmentVariable("LOCAL_BLOB_PATH") ?? $"{Directory.GetCurrentDirectory()}/blobs";

@@ -37,9 +37,7 @@ namespace MiddleMan.Service.WebSocketClients
 
       if (clientData == null) return null;
 
-      // TO DO - return only instance connected clients
-      var isConnected = false;
-      return await BuildDto(clientData, isConnected);
+      return await BuildDto(clientData);
     }
 
     public async Task<IEnumerable<WebSocketClientDto>> GetWebSocketClients(string identifier)
@@ -56,9 +54,7 @@ namespace MiddleMan.Service.WebSocketClients
       var clients = new List<WebSocketClientDto>();
       foreach (var client in clientData)
       {
-        // TO DO - return only instance connected clients
-        var isConnected = false;;
-        clients.Add(await BuildDto(client, isConnected));
+        clients.Add(await BuildDto(client));
       }
 
       return clients;
@@ -101,13 +97,12 @@ namespace MiddleMan.Service.WebSocketClients
       return tokenHash.SequenceEqual(client.TokenHash);
     }
 
-    private async Task<WebSocketClientDto> BuildDto(Client client, bool isConnected = false)
+    private async Task<WebSocketClientDto> BuildDto(Client client)
     {
       var methodsUrl = string.IsNullOrWhiteSpace(client.MethodInfoUrl) ? null : await blobService.GetAbsoluteUrl(client.MethodInfoUrl);
       return new WebSocketClientDto
       {
         Name = client.Name,
-        IsConnected = isConnected,
         MethodsUrl = methodsUrl,
         Signature = client.Signatures,
         TokenHash = client.TokenHash,

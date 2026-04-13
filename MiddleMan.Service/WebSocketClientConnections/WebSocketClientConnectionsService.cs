@@ -75,6 +75,7 @@ namespace MiddleMan.Service.WebSocketClientConnections
         return new ClientConnection
         {
           ConnectionId = selectedConnection.ConnectionId,
+          SameServerConnection = true,
           ClientCapabilities = selectedConnection.Capabilities ?? new()
         };
       }

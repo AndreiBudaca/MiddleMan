@@ -6,8 +6,6 @@
 
     public string? MethodsUrl { get; set; }
 
-    public bool IsConnected { get; set; }
-
     public string? Signature { get; set; }
 
     public string? TokenHash { get; set; }

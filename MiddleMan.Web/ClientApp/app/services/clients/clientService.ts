@@ -2,6 +2,7 @@ import { env } from "~/environment";
 import { DELETE, GET, POST, POST_RAW } from "../requests/requests";
 import type {
   Client,
+  ClientConnectionStatus,
   ClientName,
   ClientTokenData,
   ClientWithMethods,
@@ -24,7 +25,7 @@ export async function getClients(): Promise<Client[]> {
       return {
         name: d.name,
         methodsUrl: d.methodsUrl,
-        isConnected: d.isConnected,
+        isConnected: false,
         signature: d.signature,
         tokenHash: d.tokenHash,
       };
@@ -33,6 +34,26 @@ export async function getClients(): Promise<Client[]> {
     clients.sort((a, b) => (a.name > b.name ? 1 : -1));
 
     return clients;
+  } catch (error) {
+    console.error("Error parsing JSON response:", error);
+  }
+
+  return [];
+}
+
+export async function getClientsConnectionStatus(): Promise<ClientConnectionStatus[]> {
+  const result = await GET(`${env.API_BASE_URL}/clients/connection-status`);
+
+  try {
+    const data = ((await result?.json()) ?? []) as any[];
+
+    return data.map((d) => {
+      return {
+        name: d.name,
+        isConnected: d.isConnected,
+      };
+    });
+
   } catch (error) {
     console.error("Error parsing JSON response:", error);
   }

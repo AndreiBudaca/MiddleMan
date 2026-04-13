@@ -4,8 +4,6 @@
   {
     public string? Name { get; set; }
 
-    public bool IsConnected { get; set; }
-
     public string? MethodsUrl { get; set; }
 
     public byte[]? Signature { get; set; }

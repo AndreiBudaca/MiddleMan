@@ -18,12 +18,12 @@ namespace MiddleMan.Web.Infrastructure.Configuration
     {
       // Add DB context
       services.AddSingleton<IInMemoryContext, PureInMemoryContext>();
-      services.AddScoped<IDbConnectionFactory, MySQLConnectionFactory>(service => 
+      services.AddScoped<IDbConnectionFactory, MySQLConnectionFactory>(service =>
         new MySQLConnectionFactory(service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.MySql)!));
 
       // Repositories
       services.AddScoped<IClientRepository, ClientRepository>();
-      
+
       // Add services
       services.AddScoped(service =>
         new OracleObjectStorageClientConfigurator(
@@ -42,11 +42,18 @@ namespace MiddleMan.Web.Infrastructure.Configuration
       services.AddScoped<IWebSocketClientConnectionsService, WebSocketClientConnectionsService>();
 
       // Add cummunication channels
-      services.AddSingleton<ICommunicationChannel, RedisCommunicationChannel>(service =>
-        new RedisCommunicationChannel(
-          service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis)!,
-          service.GetRequiredService<IInMemoryContext>())
-      );
+      if (ServerCapabilities.ClusterMode)
+      {
+        services.AddSingleton<ICommunicationChannel, RedisCommunicationChannel>(service =>
+          new RedisCommunicationChannel(
+            service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis)!,
+            service.GetRequiredService<IInMemoryContext>())
+        );
+      }
+      else
+      {
+        services.AddSingleton<ICommunicationChannel, DeadCommunicationChannel>();
+      }
 
       // Add communication hubs
       services.AddScoped<StreamingCommunicationManager>();

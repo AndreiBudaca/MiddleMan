@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import type { ClientWithMethods } from "~/contracts/client";
-import { getClientsWithMethods } from "~/services/clients/clientService";
+import type {
+  ClientConnectionStatus,
+  ClientWithMethods
+} from "~/contracts/client";
+import { getClientsConnectionStatus, getClientsWithMethods } from "~/services/clients/clientService";
 import ClientTreeView from "./clientTreeView";
 import { Box } from "@mui/material";
 import type { ClientMethod } from "~/contracts/clientMethods";
@@ -8,11 +11,17 @@ import MethodsView from "./methodsView";
 
 export default function DashboardClients() {
   const [clients, setClients] = useState<ClientWithMethods[]>([]);
+  const [clientConnectionStatus, setClientConnectionStatus] = useState<
+    ClientConnectionStatus[]
+  >([]);
   const [selectedClient, setSelectedClient] =
     useState<ClientWithMethods | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<ClientMethod | null>(
-    null
+    null,
   );
+  const isSelectedClientConnected = clientConnectionStatus.find(
+    (s) => s.name == selectedClient?.name,
+  )?.isConnected ?? false;
 
   const onSelectedMethodChange = (path: string) => {
     const pathParts = path.split("/");
@@ -27,7 +36,7 @@ export default function DashboardClients() {
       return;
 
     const eligibleMethods = eligibleClients[0].methods.filter(
-      (m) => m.name == pathParts[1]
+      (m) => m.name == pathParts[1],
     );
     if (
       !eligibleMethods ||
@@ -48,6 +57,17 @@ export default function DashboardClients() {
     fetchClients();
   }, []);
 
+  useEffect(() => {
+    const fetchClientConnectionStatus = async () => {
+      const result = await getClientsConnectionStatus();
+      setClientConnectionStatus(result);
+    };
+
+    if (clients && clients.length > 0) {
+      fetchClientConnectionStatus();
+    }
+  }, [clients]);
+
   return (
     <Box
       marginTop="50px"
@@ -58,12 +78,13 @@ export default function DashboardClients() {
     >
       <ClientTreeView
         clients={clients}
+        clientsConnectionStatus={clientConnectionStatus}
         onNodeSelected={onSelectedMethodChange}
       />
       <MethodsView
         client={selectedClient?.name}
         method={selectedMethod}
-        isCallable={selectedClient?.isConnected ?? false}
+        isCallable={isSelectedClientConnected}
       />
     </Box>
   );

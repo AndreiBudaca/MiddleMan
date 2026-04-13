@@ -1,13 +1,16 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MiddleMan.Communication;
 using MiddleMan.Core;
 using MiddleMan.Service.WebSocketClientConnections;
+using MiddleMan.Service.WebSocketClientConnections.Classes;
 using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Service.WebSocketClients.Dto;
 using MiddleMan.Web.Controllers.Clients.Model;
 using MiddleMan.Web.Infrastructure.Identity;
 using MiddleMan.Web.Infrastructure.Tokens;
 using MiddleMan.Web.Infrastructure.Tokens.Model;
+using Org.BouncyCastle.Crypto.Prng;
 
 namespace MiddleMan.Web.Controllers.Clients
 {
@@ -15,12 +18,13 @@ namespace MiddleMan.Web.Controllers.Clients
   [Route("api/clients")]
   public class ClientsController(
     IWebSocketClientsService webSocketClientsService,
-    IConfiguration configuration
-,
-    IWebSocketClientConnectionsService webSocketClientConnectionsService) : Controller
+    IConfiguration configuration,
+    IWebSocketClientConnectionsService webSocketClientConnectionsService,
+    ClientInfoCommunicationManager clientInfoCommunicationManager) : Controller
   {
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
     private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
+    private readonly ClientInfoCommunicationManager clientInfoCommunicationManager = clientInfoCommunicationManager;
     private readonly IConfiguration configuration = configuration;
 
     [HttpGet]
@@ -30,6 +34,33 @@ namespace MiddleMan.Web.Controllers.Clients
       var model = clients.Select(BuildModel);
 
       return Ok(model);
+    }
+
+    [HttpGet("connection-status")]
+    public async Task<IActionResult> GetConnectionStatus()
+    {
+      var clients = await webSocketClientsService.GetWebSocketClients(User.Identifier());
+
+      var clientConnectionStatuses = await Task.WhenAll(clients
+        .Where(c => c != null && c.Name != null)
+        .Select(async client =>
+        {
+          var clientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), client.Name!);
+
+          if (clientConnection == null && ServerCapabilities.ClusterMode)
+          {
+            clientConnection = await clientInfoCommunicationManager.QueryClientConnection(User.Identifier(), client.Name!);
+          }
+
+          return new WebSocketClientConnectionStatusModel
+          {
+            Name = client.Name,
+            IsConnected = clientConnection != null,
+          };
+        }
+      ));
+
+      return Ok(clientConnectionStatuses);
     }
 
     [HttpPost]
@@ -110,7 +141,6 @@ namespace MiddleMan.Web.Controllers.Clients
       {
         Name = client.Name,
         MethodsUrl = client.MethodsUrl,
-        IsConnected = client.IsConnected,
         Signature = client.Signature != null ? Convert.ToBase64String(client.Signature) : null,
         TokenHash = client.TokenHash != null ? Convert.ToBase64String(client.TokenHash) : null,
       };

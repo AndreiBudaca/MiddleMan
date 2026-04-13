@@ -5,9 +5,13 @@ export interface ClientName
   name: string;
 }
 
+export interface ClientConnectionStatus extends ClientName
+{
+  isConnected: boolean;
+}
+
 export interface Client extends ClientName {
   methodsUrl: string | null;
-  isConnected: boolean;
   signature: string | null;
   tokenHash: string | null;
 }

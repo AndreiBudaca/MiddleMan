@@ -47,57 +47,39 @@ namespace MiddleMan.Web.Controllers.WebSockets
         return;
       }
 
-      var onInstanceClientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), webSocketClientName);
-      var externalClientConnection = onInstanceClientConnection == null ? await GetExternalClientConnection(webSocketClientName) : null;
+      var clientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), webSocketClientName);
+      
+      if (clientConnection == null && ServerCapabilities.ClusterMode)
+      {
+        clientConnection = await clientInfoCommunicationManager.QueryClientConnection(User.Identifier(), webSocketClientName, cancellationToken);
+      }
 
-      var connectionExists = onInstanceClientConnection != null || externalClientConnection != null;
-      var connectionIsValid = !string.IsNullOrWhiteSpace(onInstanceClientConnection?.ConnectionId) || !string.IsNullOrWhiteSpace(externalClientConnection?.ConnectionId);
-
-      if (!connectionExists || !connectionIsValid)
+      if (string.IsNullOrWhiteSpace(clientConnection?.ConnectionId))
       {
         await new StatusResult(StatusCodes.Status404NotFound).ApplyResultAsync(HttpContext);
         return;
       }
 
-      var connectionId = onInstanceClientConnection?.ConnectionId ?? externalClientConnection!.ConnectionId!;
-      var hubClient = hubContext.Clients.Client(connectionId);
+      var hubClient = hubContext.Clients.Client(clientConnection.ConnectionId);
       if (hubClient == null)
       {
-        webSocketClientConnectionsService.DeleteWebSocketClientConnection(User.Identifier(), webSocketClientName, connectionId);
+        webSocketClientConnectionsService.DeleteWebSocketClientConnection(User.Identifier(), webSocketClientName, clientConnection.ConnectionId);
+        // TO DO: also delete from other servers in cluster
         await new StatusResult(StatusCodes.Status404NotFound).ApplyResultAsync(HttpContext);
         return;
       }
 
-      var capabilities = onInstanceClientConnection?.ClientCapabilities ?? externalClientConnection?.ClientCapabilities ?? new ClientCapabilities();
-
-      logger.LogInformation("Invoking {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", webSocketClientName, method, connectionId);
+      logger.LogInformation("Invoking {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", webSocketClientName, method, clientConnection.ConnectionId);
       
-      IClientInvoker invoker = capabilities.SupportsStreaming ?
+      IClientInvoker invoker = clientConnection.ClientCapabilities.SupportsStreaming ?
         new StreamInvoker(intraServerCommunicationManager, streamingCommunicationManager, logger) :
         new DirectClientInvoker(logger);
 
-      var result = await invoker.Invoke(HttpContext, method, onInstanceClientConnection ?? externalClientConnection!, onInstanceClientConnection != null, hubClient, cancellationToken);
+      var result = await invoker.Invoke(HttpContext, method, clientConnection, hubClient, cancellationToken);
       await result.ApplyResultAsync(HttpContext);
       await invoker.Cleanup();
 
-      logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", webSocketClientName, method, connectionId);
-    }
-
-    private async Task<ClientConnection?> GetExternalClientConnection(string webSocketClientName)
-    {
-      var cts = new CancellationTokenSource(TimeSpan.FromSeconds(ServerCapabilities.ClientConnectionTimeoutSeconds));
-      try
-      {
-        return await clientInfoCommunicationManager.QueryClientConnection(User.Identifier(), webSocketClientName, cts.Token);
-      }
-      catch (OperationCanceledException) when (cts.IsCancellationRequested)
-      {
-        return null;
-      }
-      finally
-      {
-        cts.Dispose();
-      }
+      logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", webSocketClientName, method, clientConnection.ConnectionId);
     }
   }
 }
