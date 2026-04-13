@@ -2,20 +2,20 @@
 {
   public static class ServerCapabilities
   {
-    public const int MaxContentLength = 32 * 1024; // 32KB
-    
-    public const int IntraServerBufferedChunks = 10;
+    public static readonly int MaxContentLength = int.TryParse(Environment.GetEnvironmentVariable("MIDDLEMAN_MAX_CONTENT_LENGTH"), out int maxContentLength) ? maxContentLength : 32 * 1024; // 32KB
 
-    public const int GlobalTimeoutSeconds = 10;
+    public static readonly int IntraServerBufferedChunks = int.TryParse(Environment.GetEnvironmentVariable("MIDDLEMAN_INTRA_SERVER_BUFFERED_CHUNKS"), out int intraServerBufferedChunks) ? intraServerBufferedChunks : 10;
 
-    public const int ClientConnectionTimeoutSeconds = 5;
+    public static readonly int GlobalTimeoutSeconds = int.TryParse(Environment.GetEnvironmentVariable("MIDDLEMAN_GLOBAL_TIMEOUT_SECONDS"), out int globalTimeoutSeconds) ? globalTimeoutSeconds : 10;
 
-    public const bool ClusterMode = true;
+    public static readonly int ClientConnectionTimeoutSeconds = int.TryParse(Environment.GetEnvironmentVariable("MIDDLEMAN_CLIENT_CONNECTION_TIMEOUT_SECONDS"), out int clientConnectionTimeoutSeconds) ? clientConnectionTimeoutSeconds : 5;
+
+    public static readonly bool ClusterMode = Environment.GetEnvironmentVariable("MIDDLEMAN_CLUSTER_MODE") == "true";
 
     public static readonly int[] AllowedVersions = [0];
 
-    public static string StaticFilesPath => Environment.GetEnvironmentVariable("LOCAL_BLOB_PATH") ?? $"{Directory.GetCurrentDirectory()}/blobs";
+    public static readonly string StaticFilesPath = Environment.GetEnvironmentVariable("MIDDLEMAN_LOCAL_BLOB_PATH") ?? $"{Directory.GetCurrentDirectory()}/blobs";
 
-    public static string UIStaticFilesPath => $"{Directory.GetCurrentDirectory()}/ClientApp/build/client";
+    public static readonly string UIStaticFilesPath = $"{Directory.GetCurrentDirectory()}/ClientApp/build/client";
   }
 }
