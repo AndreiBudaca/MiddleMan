@@ -41,16 +41,20 @@ namespace MiddleMan.Web
 
       builder.Services.AddServices();
       
-      builder.Services.AddSignalR(options =>
+      var signalRBuilder = builder.Services.AddSignalR(options =>
       {
         options.StreamBufferCapacity = 1;
         options.MaximumReceiveMessageSize = ServerCapabilities.MaxContentLength * 2;
         options.MaximumParallelInvocationsPerClient = 10;
         options.EnableDetailedErrors = builder.Environment.IsDevelopment();
       })
-      .AddMessagePackProtocol()
-      .AddStackExchangeRedis(builder.Configuration.GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis) 
-        ?? throw new InvalidOperationException("Redis connection string is not configured."));
+      .AddMessagePackProtocol();
+
+      if (ServerCapabilities.ClusterMode)
+      {
+        signalRBuilder.AddStackExchangeRedis(builder.Configuration.GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis) 
+          ?? throw new InvalidOperationException("Redis connection string is not configured."));
+      }
 
       builder.Services
         .AddAuthentication(o =>

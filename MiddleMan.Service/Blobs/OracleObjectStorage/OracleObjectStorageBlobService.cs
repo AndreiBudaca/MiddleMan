@@ -73,5 +73,21 @@ namespace MiddleMan.Service.Blobs.OracleObjectStorage
         }
       }
     }
+
+    public async Task<string> UploadBlob(string[] blobParts, byte[] data, CancellationToken cancellationToken)
+    {
+      var blobPath = string.Join('/', blobParts);
+      var request = new PutObjectRequest
+      {
+        BucketName = configurator.Bucket,
+        ObjectName = blobPath,
+        NamespaceName = configurator.Namespace,
+        PutObjectBody = new MemoryStream(data),
+      };
+
+      var response = await configurator.Client.PutObject(request, cancellationToken: cancellationToken);
+
+      return blobPath;
+    }
   }
 }

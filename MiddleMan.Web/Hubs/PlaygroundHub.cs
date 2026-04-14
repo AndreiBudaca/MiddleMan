@@ -93,6 +93,15 @@ namespace MiddleMan.Web.Hubs
       await webSocketClientMethodService.ReceiveMethodsAsync(id, name, channelReader.ReadAllAsync(), CancellationToken.None);
     }
 
+    public async Task MethodsRaw(byte[] methodsBytes)
+    {
+      var (id, name, _, clientId) = GetClientInfoFromContext();
+
+      await ConnectionChecks(id, name, clientId);
+
+      await webSocketClientMethodService.ReceiveMethodsAsync(id, name, methodsBytes, CancellationToken.None);
+    }
+
     public async Task<ServerInfoModel> Negociate(ClientInfoModel clientInfo)
     {
       var (id, name, _, clientId) = GetClientInfoFromContext();

@@ -6,6 +6,8 @@
 
     Task<string> UploadBlob(string[] blobParts, IAsyncEnumerable<byte[]> data, CancellationToken cancellationToken);
 
+    Task<string> UploadBlob(string[] blobParts, byte[] data, CancellationToken cancellationToken);
+
     Task DeleteBlob(string relativeUrl);
   }
 }

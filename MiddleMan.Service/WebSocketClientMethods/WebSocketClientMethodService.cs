@@ -24,10 +24,29 @@ namespace MiddleMan.Service.WebSocketClientMethods
       if (!ServerCapabilities.AllowedVersions.Contains(metadata.Version)) throw new NotSupportedException($"Version {metadata.Version} is not supported.");
       if (metadata.Operation == MethodPackConstants.Operations.OK) return;
 
-      var blobRelativeUrl = await _blobService.UploadBlob(["websocket-client-methods", $"{identifier}_{name}_methods_{Guid.NewGuid()}.bin"], 
+      var blobRelativeUrl = await _blobService.UploadBlob(["websocket-client-methods", $"{identifier}_{name}_methods_{Guid.NewGuid()}.bin"],
         enumerationResult.Next.PrependItems(enumerationResult.Received, cancellationToken), cancellationToken);
 
-      if (client?.MethodInfoUrl is not null)
+      await UpdateMethodsUrl(client, identifier, name, metadata.Signature, blobRelativeUrl);
+    }
+
+    public async Task ReceiveMethodsAsync(string identifier, string name, byte[] methods, CancellationToken cancellationToken)
+    {
+      var client = await _clientRepository.GetByIdAsync((identifier, name)) ?? throw new InvalidOperationException($"Client {identifier}:{name} not found.");
+
+      var metadata = GetMetadata(methods);
+      if (!ServerCapabilities.AllowedVersions.Contains(metadata.Version)) throw new NotSupportedException($"Version {metadata.Version} is not supported.");
+      if (metadata.Operation == MethodPackConstants.Operations.OK) return;
+
+      var blobRelativeUrl = await _blobService.UploadBlob(["websocket-client-methods", $"{identifier}_{name}_methods_{Guid.NewGuid()}.bin"],
+        methods, cancellationToken);
+
+      await UpdateMethodsUrl(client, identifier, name, metadata.Signature, blobRelativeUrl);
+    }
+
+    private async Task UpdateMethodsUrl(Client client, string identifier, string name, byte[] signature, string methodsUrl)
+    {
+      if (client.MethodInfoUrl is not null)
       {
         await _blobService.DeleteBlob(client.MethodInfoUrl);
       }
@@ -37,12 +56,12 @@ namespace MiddleMan.Service.WebSocketClientMethods
          new ColumnInfo
           {
             ColumnName = Client.Columns.Signatures,
-            Value = metadata.Signature,
+            Value = signature,
           },
            new ColumnInfo
           {
             ColumnName = Client.Columns.MethodInfoUrl,
-            Value = blobRelativeUrl,
+            Value = methodsUrl,
           },
         ]);
     }

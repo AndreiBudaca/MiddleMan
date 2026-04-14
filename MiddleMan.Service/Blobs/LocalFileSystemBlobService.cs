@@ -19,6 +19,17 @@ namespace MiddleMan.Service.Blobs
       return blobPath;
     }
 
+    public async Task<string> UploadBlob(string[] blobParts, byte[] data, CancellationToken cancellationToken)
+    {
+      var blobPath = string.Join(Path.DirectorySeparatorChar, blobParts);
+      var filePath = Path.Combine(ServerCapabilities.StaticFilesPath, blobPath);
+
+      using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, ServerCapabilities.MaxContentLength, useAsync: true);
+      await fileStream.WriteAsync(data.AsMemory(0, data.Length), cancellationToken);
+
+      return blobPath;
+    }
+
     public Task DeleteBlob(string relativeUrl)
     {
       var filePath = Path.Combine(ServerCapabilities.StaticFilesPath, relativeUrl);
