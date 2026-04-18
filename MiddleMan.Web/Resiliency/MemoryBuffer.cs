@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 
 namespace MiddleMan.Web.Resiliency
 {
-  public class MemoryBuffer(IAsyncEnumerator<byte[]> contentStream, int maxCapacity) : IContentBuffer<byte[]>
+  public class MemoryBuffer(IAsyncEnumerator<byte[]> contentStream, int maxCapacity) : IContentBuffer
   {
     private readonly List<byte[]> chunks = new(maxCapacity);
     private readonly IAsyncEnumerator<byte[]> enumerator = contentStream;

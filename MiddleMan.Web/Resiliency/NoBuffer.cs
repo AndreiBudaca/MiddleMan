@@ -1,6 +1,6 @@
 namespace MiddleMan.Web.Resiliency
 {
-  public class NoBuffer(IAsyncEnumerable<byte[]> source) : IContentBuffer<byte[]>
+  public class NoBuffer(IAsyncEnumerable<byte[]> source) : IContentBuffer
   {
     private readonly IAsyncEnumerable<byte[]> sourceStream = source;
 

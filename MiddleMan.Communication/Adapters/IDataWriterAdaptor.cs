@@ -1,6 +1,6 @@
 ﻿namespace MiddleMan.Communication.Adapters
 {
-  public interface IDataWriterAdapter
+  public interface IDataWriterAdaptor
   {
     public IAsyncEnumerable<byte[]> Adapt(); 
   }

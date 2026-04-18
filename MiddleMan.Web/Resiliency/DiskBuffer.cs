@@ -3,7 +3,7 @@ using MiddleMan.Core;
 
 namespace MiddleMan.Web.Resiliency
 {
-  public class DiskBuffer(IAsyncEnumerator<byte[]> enumerator) : IContentBuffer<byte[]>
+  public class DiskBuffer(IAsyncEnumerator<byte[]> enumerator) : IContentBuffer
   {
     private readonly List<int> chunkSizes = [];
     private readonly FileStream fileStream = new(Path.GetTempFileName(), FileMode.Create, FileAccess.ReadWrite, FileShare.Read, ServerCapabilities.MaxChunkSize, FileOptions.Asynchronous | FileOptions.DeleteOnClose);

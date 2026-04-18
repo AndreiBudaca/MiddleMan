@@ -10,9 +10,9 @@
 
     public static readonly int ClientConnectionTimeoutSeconds = int.TryParse(Environment.GetEnvironmentVariable("MIDDLEMAN_CLIENT_CONNECTION_TIMEOUT_SECONDS"), out int clientConnectionTimeoutSeconds) ? clientConnectionTimeoutSeconds : 5;
 
-    public static readonly bool ClusterMode = Environment.GetEnvironmentVariable("MIDDLEMAN_CLUSTER_MODE") == "true";
+    public static readonly bool ClusterMode = true || Environment.GetEnvironmentVariable("MIDDLEMAN_CLUSTER_MODE") == "true";
 
-    public static readonly bool FaultToleranceEnabled = Environment.GetEnvironmentVariable("MIDDLEMAN_FAULT_TOLERANCE_ENABLED") == "true";
+    public static readonly bool FaultToleranceEnabled = true || Environment.GetEnvironmentVariable("MIDDLEMAN_FAULT_TOLERANCE_ENABLED") == "true";
 
     public static readonly int MaxRetryAttempts = int.TryParse(Environment.GetEnvironmentVariable("MIDDLEMAN_MAX_RETRY_ATTEMPTS"), out int maxRetryAttempts) ? maxRetryAttempts : 3;
 

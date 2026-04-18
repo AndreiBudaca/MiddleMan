@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 
 namespace MiddleMan.Web.Resiliency
 {
-  public class HybridBuffer : IContentBuffer<byte[]>
+  public class HybridBuffer : IContentBuffer
   {
     private readonly int maxMemoryCapacity;
     private readonly MemoryBuffer memoryBuffer;
