@@ -126,7 +126,7 @@ namespace MiddleMan.Web.Hubs
       return new ServerInfoModel
       {
         IsAccepted = true,
-        MaxMessageLength = ServerCapabilities.MaxContentLength,
+        MaxMessageLength = ServerCapabilities.MaxChunkSize,
         MethodSignature = client?.Signature,
       };
     }

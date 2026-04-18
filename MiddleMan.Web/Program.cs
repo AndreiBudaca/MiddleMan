@@ -44,7 +44,7 @@ namespace MiddleMan.Web
       var signalRBuilder = builder.Services.AddSignalR(options =>
       {
         options.StreamBufferCapacity = 1;
-        options.MaximumReceiveMessageSize = ServerCapabilities.MaxContentLength * 2;
+        options.MaximumReceiveMessageSize = ServerCapabilities.MaxChunkSize * 2;
         options.MaximumParallelInvocationsPerClient = 10;
         options.EnableDetailedErrors = builder.Environment.IsDevelopment();
         options.KeepAliveInterval = TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds / 2);

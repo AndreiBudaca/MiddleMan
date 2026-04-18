@@ -6,7 +6,7 @@ namespace MiddleMan.Web.Communication.ClientInvocator
 {
   public interface IClientInvoker
   {
-    public Task<IControllerDefinedResult> Invoke(HttpContext httpContext, string method, ClientConnection webSocketClientConnection, ISingleClientProxy hubClient, CancellationToken cancellationToken);
+    public Task<IControllerResult> Invoke(HttpContext httpContext, string method, ClientConnection webSocketClientConnection, ISingleClientProxy hubClient, CancellationToken cancellationToken);
     public Task Cleanup();
   }
 }

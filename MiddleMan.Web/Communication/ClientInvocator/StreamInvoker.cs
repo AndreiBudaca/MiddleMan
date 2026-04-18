@@ -23,7 +23,7 @@ namespace MiddleMan.Web.Communication.ClientInvocator
       return intraServerCommunicationManager.ClearRequestSession(correlation);
     }
 
-    public async Task<IControllerDefinedResult> Invoke(HttpContext httpContext, string method, ClientConnection webSocketClientConnection,
+    public async Task<IControllerResult> Invoke(HttpContext httpContext, string method, ClientConnection webSocketClientConnection,
      ISingleClientProxy hubClient, CancellationToken cancellationToken)
     {
       var adapter = new HttpRequestAdapter(httpContext.Request, new HttpUser
@@ -48,14 +48,14 @@ namespace MiddleMan.Web.Communication.ClientInvocator
       }
     }
 
-    private async Task<IControllerDefinedResult> SameServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, CancellationToken cancellationToken)
+    private async Task<IControllerResult> SameServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, CancellationToken cancellationToken)
     {
       await streamingCommunicationManager.WriteAsync(adapter, correlation, cancellationToken);
 
       return new MiddleManClientStreamingResult(streamingCommunicationManager.ReadAsync(correlation, cancellationToken), cancellationToken);
     }
 
-    private async Task<IControllerDefinedResult> IntraServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, CancellationToken cancellationToken)
+    private async Task<IControllerResult> IntraServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, CancellationToken cancellationToken)
     {
       await intraServerCommunicationManager.WriteRequestAsync(adapter, correlation, cancellationToken);
 

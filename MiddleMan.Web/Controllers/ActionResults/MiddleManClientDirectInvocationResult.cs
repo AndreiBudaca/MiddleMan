@@ -3,7 +3,7 @@ using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Controllers.ActionResults
 {
-public class MiddleManClientDirectInvocationResult : IControllerDefinedResult
+public class MiddleManClientDirectInvocationResult : IControllerResult
   {
     private readonly DirectInvocationResponse? response;
     private readonly CancellationToken cancellationToken = CancellationToken.None;

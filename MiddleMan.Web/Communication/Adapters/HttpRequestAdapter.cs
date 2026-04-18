@@ -20,8 +20,8 @@ namespace MiddleMan.Web.Communication.Adapters
         yield return BitConverter.GetBytes(0);
       }
 
-      var buffer = new byte[ServerCapabilities.MaxContentLength];
-      var bytesRead = await source.ReadAsync(buffer.AsMemory(0, ServerCapabilities.MaxContentLength));
+      var buffer = new byte[ServerCapabilities.MaxChunkSize];
+      var bytesRead = await source.ReadAsync(buffer.AsMemory(0, ServerCapabilities.MaxChunkSize));
 
       while (bytesRead > 0)
       {
@@ -34,7 +34,7 @@ namespace MiddleMan.Web.Communication.Adapters
           yield return buffer.Take(bytesRead).ToArray();
         }
 
-        bytesRead = await source.ReadAsync(buffer.AsMemory(0, ServerCapabilities.MaxContentLength));
+        bytesRead = await source.ReadAsync(buffer.AsMemory(0, ServerCapabilities.MaxChunkSize));
       }
     }
   }

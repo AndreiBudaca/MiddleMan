@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Communication;
 using MiddleMan.Core;
 using MiddleMan.Service.WebSocketClientConnections;
-using MiddleMan.Service.WebSocketClientConnections.Classes;
 using MiddleMan.Web.Communication.ClientInvocator;
 using MiddleMan.Web.Controllers.ActionResults;
 using MiddleMan.Web.Hubs;
@@ -52,6 +51,9 @@ namespace MiddleMan.Web.Controllers.WebSockets
       if (clientConnection == null && ServerCapabilities.ClusterMode)
       {
         clientConnection = await clientInfoCommunicationManager.QueryClientConnection(User.Identifier(), webSocketClientName, cancellationToken);
+        
+        // double check after querying other servers in cluster
+        clientConnection ??= webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), webSocketClientName); 
       }
 
       if (string.IsNullOrWhiteSpace(clientConnection?.ConnectionId))

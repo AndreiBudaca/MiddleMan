@@ -16,10 +16,10 @@ namespace MiddleMan.Web.Communication.ClientInvocator
       return Task.CompletedTask;
     }
 
-    public async Task<IControllerDefinedResult> Invoke(HttpContext httpContext, string method, ClientConnection webSocketClientConnection,
+    public async Task<IControllerResult> Invoke(HttpContext httpContext, string method, ClientConnection webSocketClientConnection,
      ISingleClientProxy hubClient, CancellationToken cancellationToken)
     {
-      if (httpContext.Request.ContentLength > ServerCapabilities.MaxContentLength)
+      if (httpContext.Request.ContentLength > ServerCapabilities.MaxChunkSize)
       {
         return new StatusResult(StatusCodes.Status413PayloadTooLarge);
       }

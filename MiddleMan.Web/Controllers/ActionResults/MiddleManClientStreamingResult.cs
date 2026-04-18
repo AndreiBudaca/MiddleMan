@@ -4,7 +4,7 @@ using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Controllers.ActionResults
 {
-  public class MiddleManClientStreamingResult : IControllerDefinedResult
+  public class MiddleManClientStreamingResult : IControllerResult
   {
     private readonly IAsyncEnumerable<byte[]>? response = null;
     private readonly CancellationToken cancellationToken = CancellationToken.None;
