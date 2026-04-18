@@ -123,7 +123,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
       });
 
       IContentBuffer buffer = ServerCapabilities.FaultToleranceEnabled ?
-       new HybridBuffer(requestAdaptor.Adapt(), 10) :
+       new HybridBuffer(requestAdaptor.Adapt(), ServerCapabilities.MaxMemoryBufferSize) :
        new NoBuffer(requestAdaptor.Adapt());
 
       return (buffer, metadata);
@@ -135,7 +135,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
 
       if (ServerCapabilities.FaultToleranceEnabled)
       {
-        var buffer = new HybridBuffer(responseData, 10);
+        var buffer = new HybridBuffer(responseData, ServerCapabilities.MaxMemoryBufferSize);
 
         // Ensure the response is buffered before returning
         await foreach (var _ in buffer.Read(cancellationToken)) { }      
