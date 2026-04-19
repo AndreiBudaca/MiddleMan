@@ -28,8 +28,8 @@ namespace MiddleMan.Web.Resiliency
     public async IAsyncEnumerable<byte[]> Read([EnumeratorCancellation] CancellationToken cancellationToken)
     {
       var currentIndex = 0;
-      var memoryEnumerator = memoryBuffer.Read(cancellationToken).GetAsyncEnumerator(cancellationToken);
-      var diskEnumerator = diskBuffer.Read(cancellationToken).GetAsyncEnumerator(cancellationToken);
+      await using var memoryEnumerator = memoryBuffer.Read(cancellationToken).GetAsyncEnumerator(cancellationToken);
+      await using var diskEnumerator = diskBuffer.Read(cancellationToken).GetAsyncEnumerator(cancellationToken);
 
       do
       {

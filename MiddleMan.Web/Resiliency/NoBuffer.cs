@@ -1,17 +1,23 @@
+using System.Runtime.CompilerServices;
+
 namespace MiddleMan.Web.Resiliency
 {
   public class NoBuffer(IAsyncEnumerable<byte[]> source) : IContentBuffer
   {
     private readonly IAsyncEnumerable<byte[]> sourceStream = source;
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
       GC.SuppressFinalize(this);
+      return ValueTask.CompletedTask;
     }
 
-    public IAsyncEnumerable<byte[]> Read(CancellationToken cancellationToken)
+    public async IAsyncEnumerable<byte[]> Read([EnumeratorCancellation] CancellationToken cancellationToken)
     {
-      return sourceStream;
+      await foreach (var chunk in sourceStream.WithCancellation(cancellationToken))
+      {
+        yield return chunk;
+      }
     }
   }
 }

@@ -29,7 +29,7 @@ namespace MiddleMan.Web.Controllers.ActionResults
           },
         };
 
-        responseMetadata?.Apply(context.Response);
+        (responseMetadata ?? defaultResponseMetadata).Apply(context.Response);
         if (response == null) return;
 
         await foreach (var chunk in response.WithCancellation(cancellationToken))

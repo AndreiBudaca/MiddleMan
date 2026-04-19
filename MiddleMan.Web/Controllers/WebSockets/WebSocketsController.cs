@@ -51,7 +51,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
       }
 
       var (bufferedRequest, metadata) = ProcessRequest(HttpContext.Request);
-      IContentBuffer? responseBuffer = null;
+      IContentBuffer? bufferedResponse = null;
 
       var retryCount = 1;
       var wasSuccessfulInvocation = false;
@@ -89,14 +89,14 @@ namespace MiddleMan.Web.Controllers.WebSockets
         try
         {
           var (responseMetadata, responseData) = await invoker.Invoke(bufferedRequest.Read(cancellationToken), metadata, method, clientConnection, hubClient, cancellationToken);
-          responseBuffer = await BufferResponse(responseData, cancellationToken);
+          bufferedResponse = await BufferResponse(responseData, cancellationToken);
 
-          var result = new MiddleManClientResult(responseMetadata, responseBuffer?.Read(cancellationToken), cancellationToken);
+          var result = new MiddleManClientResult(responseMetadata, bufferedResponse?.Read(cancellationToken), cancellationToken);
           await result.ApplyResultAsync(HttpContext);
 
           await invoker.Cleanup();
           await bufferedRequest.DisposeAsync();
-          if (responseBuffer != null) await responseBuffer.DisposeAsync();
+          if (bufferedResponse != null) await bufferedResponse.DisposeAsync();
 
           logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", webSocketClientName, method, clientConnection.ConnectionId);
           return;
@@ -104,14 +104,21 @@ namespace MiddleMan.Web.Controllers.WebSockets
         catch (Exception ex)
         {
           logger.LogError("Invocation error for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}. Error: {ErrorMessage}", webSocketClientName, method, clientConnection.ConnectionId, ex.Message);
-          
-          if (responseBuffer != null) await responseBuffer.DisposeAsync();
+
+          if (bufferedResponse != null)
+          {
+            await bufferedResponse.DisposeAsync();
+            bufferedResponse = null;
+          }
+
           await invoker.Cleanup();
         }
       } while (!wasSuccessfulInvocation && ServerCapabilities.FaultToleranceEnabled && retryCount++ < ServerCapabilities.MaxRetryAttempts);
 
-      await new StatusResult(StatusCodes.Status500InternalServerError).ApplyResultAsync(HttpContext);
+      await bufferedRequest.DisposeAsync();
+      if (bufferedResponse != null) await bufferedResponse.DisposeAsync();
 
+      await new StatusResult(StatusCodes.Status500InternalServerError).ApplyResultAsync(HttpContext);
     }
 
     private static (IContentBuffer Buffer, HttpRequestMetadata Metadata) ProcessRequest(HttpRequest request)
@@ -138,20 +145,20 @@ namespace MiddleMan.Web.Controllers.WebSockets
         var buffer = new HybridBuffer(responseData, ServerCapabilities.MaxMemoryBufferSize);
 
         // Ensure the response is buffered before returning
-        await foreach (var _ in buffer.Read(cancellationToken)) { }      
+        await foreach (var _ in buffer.Read(cancellationToken)) { }
         return buffer;
       }
 
       return new NoBuffer(responseData);
     }
 
-    private async Task<ClientConnection?> GetClientConnection(string webSocketClientName)
+    private async Task<ClientConnection?> GetClientConnection(string webSocketClientName, CancellationToken cancellationToken = default)
     {
       var clientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), webSocketClientName);
 
       if (clientConnection == null && ServerCapabilities.ClusterMode)
       {
-        clientConnection = await clientInfoCommunicationManager.QueryClientConnection(User.Identifier(), webSocketClientName, CancellationToken.None);
+        clientConnection = await clientInfoCommunicationManager.QueryClientConnection(User.Identifier(), webSocketClientName, cancellationToken);
 
         // double check after querying other servers in cluster (in case the client connection was established while we were querying other servers)
         clientConnection ??= webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), webSocketClientName);

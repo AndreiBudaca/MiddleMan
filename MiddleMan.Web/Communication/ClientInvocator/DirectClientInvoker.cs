@@ -19,7 +19,10 @@ namespace MiddleMan.Web.Communication.ClientInvocator
     public async Task<(HttpResponseMetadata?, IAsyncEnumerable<byte[]>?)> Invoke(IAsyncEnumerable<byte[]> data, HttpRequestMetadata metadata, string method, ClientConnection webSocketClientConnection,
      ISingleClientProxy hubClient, CancellationToken cancellationToken)
     {
-      if (!int.TryParse(metadata.Headers[HeaderNames.ContentLength], out int contentLength) || contentLength > ServerCapabilities.MaxChunkSize)
+      _ = metadata.Headers.TryGetValue(HeaderNames.ContentLength, out var contentLengthValue);
+      _ = int.TryParse(contentLengthValue, out int contentLength);
+
+      if (contentLength > ServerCapabilities.MaxChunkSize)
       {
         return (new HttpResponseMetadata(StatusCodes.Status413PayloadTooLarge), null);
       }
