@@ -49,6 +49,11 @@ namespace MiddleMan.Communication.Channels
       return Task.CompletedTask;
     }
 
+    public Task TerminateWithErrorAsync(string streamKey, string errorMessage)
+    {
+      return Task.CompletedTask;
+    }
+
     public Task UnsubscribeAsync(string topic)
     {
       return Task.CompletedTask;

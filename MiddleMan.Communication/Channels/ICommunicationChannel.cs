@@ -18,6 +18,8 @@ namespace MiddleMan.Communication.Channels
 
     #region "STREAMS"
     public Task AddToStreamAsync(string streamKey, byte[] data);
+    
+    public Task TerminateWithErrorAsync(string streamKey, string errorMessage);
 
     public Task SignalStreamEndAsync(string streamKey);
 

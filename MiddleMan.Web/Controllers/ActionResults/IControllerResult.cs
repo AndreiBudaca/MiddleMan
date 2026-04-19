@@ -1,6 +1,6 @@
 namespace MiddleMan.Web.Controllers.ActionResults
 {
-  public interface IControllerDefinedResult
+  public interface IControllerResult
   {
     Task ApplyResultAsync(HttpContext context);
   }

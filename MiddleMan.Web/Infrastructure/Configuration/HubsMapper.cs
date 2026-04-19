@@ -10,8 +10,8 @@ namespace MiddleMan.Web.Infrastructure.Configuration
     {
       app.MapHub<PlaygroundHub>("/playground", options =>
       {
-        options.TransportMaxBufferSize = ServerCapabilities.MaxContentLength;
-        options.ApplicationMaxBufferSize = ServerCapabilities.MaxContentLength;
+        options.TransportMaxBufferSize = ServerCapabilities.MaxChunkSize;
+        options.ApplicationMaxBufferSize = ServerCapabilities.MaxChunkSize;
         options.Transports = HttpTransportType.WebSockets;
         options.AllowStatefulReconnects = false;
         options.CloseOnAuthenticationExpiration = true;

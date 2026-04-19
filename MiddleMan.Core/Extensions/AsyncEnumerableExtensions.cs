@@ -92,5 +92,20 @@ namespace MiddleMan.Core.Extensions
     {
       return enumerable.GetAsyncEnumerator(cancellationToken).PrependItems(item, cancellationToken);
     }
+
+    public static async Task<byte[]> ReadAllBytes(this IAsyncEnumerable<byte[]> data, CancellationToken cancellationToken)
+    {
+      using var memoryStream = new MemoryStream();
+
+      await foreach (var chunk in data.WithCancellation(cancellationToken))
+      {
+        if (chunk != null)
+        {
+          await memoryStream.WriteAsync(chunk, cancellationToken);
+        }
+      }
+
+      return memoryStream.ToArray();
+    }
   }
 }

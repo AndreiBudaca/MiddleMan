@@ -1,11 +1,12 @@
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Communication;
 using MiddleMan.Communication.Adapters;
+using MiddleMan.Core.Extensions;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
 using MiddleMan.Web.Communication.Adapters;
 using MiddleMan.Web.Communication.Metadata;
-using MiddleMan.Web.Controllers.ActionResults;
-using MiddleMan.Web.Infrastructure.Identity;
 
 namespace MiddleMan.Web.Communication.ClientInvocator
 {
@@ -23,43 +24,53 @@ namespace MiddleMan.Web.Communication.ClientInvocator
       return intraServerCommunicationManager.ClearRequestSession(correlation);
     }
 
-    public async Task<IControllerDefinedResult> Invoke(HttpContext httpContext, string method, ClientConnection webSocketClientConnection,
+    public async Task<(HttpResponseMetadata?, IAsyncEnumerable<byte[]>?)> Invoke(IAsyncEnumerable<byte[]> data, HttpRequestMetadata metadata, string method, ClientConnection webSocketClientConnection,
      ISingleClientProxy hubClient, CancellationToken cancellationToken)
     {
-      var adapter = new HttpRequestAdapter(httpContext.Request, new HttpUser
-      {
-        Identifier = httpContext.User.Identifier(),
-      }, webSocketClientConnection.ClientCapabilities.SendHTTPMetadata);
+      var adapter = new MetadataAdaptorDecorator(data, metadata, webSocketClientConnection.ClientCapabilities.SendHTTPMetadata);
 
       logger.LogInformation("Starting stream invocation. Correlation ID: {CorrelationId}, Method: {Method}, IsSameServerConnection: {IsSameServerConnection}", correlation, method, webSocketClientConnection.SameServerConnection);
-      try
-      {
-        await intraServerCommunicationManager.RegisterRequestSession(correlation, webSocketClientConnection.SameServerConnection);
-        await hubClient.SendAsync(method, correlation, cancellationToken);
+      await intraServerCommunicationManager.RegisterRequestSession(correlation, webSocketClientConnection.SameServerConnection);
+      await hubClient.SendAsync(method, correlation, cancellationToken);
 
-        return webSocketClientConnection.SameServerConnection ?
-          await SameServerStreamInvocation(correlation, adapter, cancellationToken) :
-          await IntraServerStreamInvocation(correlation, adapter, cancellationToken);
-      }
-      catch (Exception ex)
-      {
-        logger.LogError("Error during streaming invocation: {message}", ex.Message);
-        return new StatusResult(StatusCodes.Status504GatewayTimeout);
-      }
+      var responseData = webSocketClientConnection.SameServerConnection ?
+        await SameServerStreamInvocation(correlation, adapter, cancellationToken) :
+        await IntraServerStreamInvocation(correlation, adapter, cancellationToken);
+
+      return await ReadMetadata(responseData, cancellationToken);
     }
 
-    private async Task<IControllerDefinedResult> SameServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, CancellationToken cancellationToken)
+    private async Task<IAsyncEnumerable<byte[]>> SameServerStreamInvocation(Guid correlation, IDataWriterAdaptor adapter, CancellationToken cancellationToken)
     {
       await streamingCommunicationManager.WriteAsync(adapter, correlation, cancellationToken);
-
-      return new MiddleManClientStreamingResult(streamingCommunicationManager.ReadAsync(correlation, cancellationToken), cancellationToken);
+      return streamingCommunicationManager.ReadAsync(correlation, cancellationToken);
     }
 
-    private async Task<IControllerDefinedResult> IntraServerStreamInvocation(Guid correlation, IDataWriterAdapter adapter, CancellationToken cancellationToken)
+    private async Task<IAsyncEnumerable<byte[]>> IntraServerStreamInvocation(Guid correlation, IDataWriterAdaptor adapter, CancellationToken cancellationToken)
     {
       await intraServerCommunicationManager.WriteRequestAsync(adapter, correlation, cancellationToken);
+      return intraServerCommunicationManager.ReadResponseAsync(correlation, cancellationToken);
+    }
 
-      return new MiddleManClientStreamingResult(intraServerCommunicationManager.ReadResponseAsync(correlation, cancellationToken), cancellationToken);
+    private async Task<(HttpResponseMetadata?, IAsyncEnumerable<byte[]>?)> ReadMetadata(IAsyncEnumerable<byte[]> data, CancellationToken cancellationToken)
+    {
+      HttpResponseMetadata? metadata = null;
+
+      var metadataLengthBytes = await data.EnumerateUntil(4, 0, cancellationToken);
+      data = metadataLengthBytes.Next;
+
+      var metadataLength = BitConverter.ToInt32(metadataLengthBytes.Received, 0);
+
+      if (metadataLength > 0)
+      {
+        var metadataBytes = await data.EnumerateUntil(metadataLength, 0, cancellationToken);
+        data = metadataBytes.Next;
+
+        var metadataJson = Encoding.UTF8.GetString(metadataBytes.Received, 0, metadataLength);
+        metadata = JsonSerializer.Deserialize<HttpResponseMetadata>(metadataJson);
+      }
+
+      return (metadata, data);
     }
   }
 }

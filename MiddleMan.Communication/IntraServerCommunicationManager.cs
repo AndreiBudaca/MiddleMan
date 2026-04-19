@@ -49,7 +49,7 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
     return inMemoryContext.ExistsInHash("intraServerRequestSessions", correlation.ToString());
   }
 
-  public Task WriteRequestAsync(IDataWriterAdapter dataWriterAdapter, Guid correlation, CancellationToken cancellationToken = default)
+  public Task WriteRequestAsync(IDataWriterAdaptor dataWriterAdapter, Guid correlation, CancellationToken cancellationToken = default)
   {
     return WriteRequestAsync(dataWriterAdapter.Adapt(), correlation, cancellationToken);
   }
@@ -59,7 +59,7 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
     return WriteAsync(dataSource, RequestChannelChunksKey(correlation), RequestChannelTokenKey(correlation), correlation, cancellationToken);
   }
 
-  public Task WriteResponseAsync(IDataWriterAdapter dataWriterAdapter, Guid correlation, CancellationToken cancellationToken = default)
+  public Task WriteResponseAsync(IDataWriterAdaptor dataWriterAdapter, Guid correlation, CancellationToken cancellationToken = default)
   {
     return WriteResponseAsync(dataWriterAdapter.Adapt(), correlation, cancellationToken);
   }
@@ -100,10 +100,13 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
         await WaitForToken(tokensKey, correlation, cancellationToken);
         await communicationChannel.AddToStreamAsync(topic, chunk);
       }
-    }
-    finally
-    {
+
       await communicationChannel.SignalStreamEndAsync(topic);
+    }
+    catch (Exception ex)
+    {
+      await communicationChannel.TerminateWithErrorAsync(topic, ex.Message);
+      throw;
     }
   }
 

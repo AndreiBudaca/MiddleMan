@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Net.Http.Headers;
 using MiddleMan.Core;
+using MiddleMan.Core.Extensions;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
 using MiddleMan.Web.Communication.Metadata;
-using MiddleMan.Web.Controllers.ActionResults;
-using MiddleMan.Web.Infrastructure.Identity;
 
 namespace MiddleMan.Web.Communication.ClientInvocator
 {
@@ -16,30 +16,20 @@ namespace MiddleMan.Web.Communication.ClientInvocator
       return Task.CompletedTask;
     }
 
-    public async Task<IControllerDefinedResult> Invoke(HttpContext httpContext, string method, ClientConnection webSocketClientConnection,
+    public async Task<(HttpResponseMetadata?, IAsyncEnumerable<byte[]>?)> Invoke(IAsyncEnumerable<byte[]> data, HttpRequestMetadata metadata, string method, ClientConnection webSocketClientConnection,
      ISingleClientProxy hubClient, CancellationToken cancellationToken)
     {
-      if (httpContext.Request.ContentLength > ServerCapabilities.MaxContentLength)
+      if (!int.TryParse(metadata.Headers[HeaderNames.ContentLength], out int contentLength) || contentLength > ServerCapabilities.MaxChunkSize)
       {
-        return new StatusResult(StatusCodes.Status413PayloadTooLarge);
+        return (new HttpResponseMetadata(StatusCodes.Status413PayloadTooLarge), null);
       }
 
       logger.LogInformation("Starting direct invocation. Method: {Method}, IsSameServerConnection: {IsSameServerConnection}", method, webSocketClientConnection.SameServerConnection);
-      try
-      {
-        var communicationManager = new DirectInvocationCommunicationManager(httpContext.Request, new HttpUser
-        {
-          Identifier = httpContext.User.Identifier(),
-        }, sendMetadata: webSocketClientConnection.ClientCapabilities.SendHTTPMetadata);
-
-        var response = await communicationManager.InvokeAsync(hubClient, method, cancellationToken);
-        return new MiddleManClientDirectInvocationResult(response, cancellationToken);
-      }
-      catch (Exception ex)
-      {
-        logger.LogError("Error during direct invocation: {message}", ex.Message);
-        return new StatusResult(StatusCodes.Status504GatewayTimeout);
-      }
+     
+      var communicationManager = new DirectInvocationCommunicationManager(data, metadata, webSocketClientConnection.ClientCapabilities.SendHTTPMetadata);
+      var response = await communicationManager.InvokeAsync(hubClient, method, cancellationToken);
+      
+      return (response.Metadata, response.Data.AsAsyncEnumerable());
     }
   }
 }

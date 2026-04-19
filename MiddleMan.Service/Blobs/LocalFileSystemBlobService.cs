@@ -9,7 +9,7 @@ namespace MiddleMan.Service.Blobs
       var blobPath = string.Join(Path.DirectorySeparatorChar, blobParts);
       var filePath = Path.Combine(ServerCapabilities.StaticFilesPath, blobPath);
 
-      using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, ServerCapabilities.MaxContentLength, useAsync: true);
+      using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, ServerCapabilities.MaxChunkSize, useAsync: true);
 
       await foreach (var b in dataChunks.WithCancellation(cancellationToken))
       {
@@ -24,7 +24,7 @@ namespace MiddleMan.Service.Blobs
       var blobPath = string.Join(Path.DirectorySeparatorChar, blobParts);
       var filePath = Path.Combine(ServerCapabilities.StaticFilesPath, blobPath);
 
-      using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, ServerCapabilities.MaxContentLength, useAsync: true);
+      using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, ServerCapabilities.MaxChunkSize, useAsync: true);
       await fileStream.WriteAsync(data.AsMemory(0, data.Length), cancellationToken);
 
       return blobPath;

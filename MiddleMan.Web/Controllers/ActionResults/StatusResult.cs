@@ -1,6 +1,6 @@
 namespace MiddleMan.Web.Controllers.ActionResults
 {
-  public class StatusResult(int statusCode) : IControllerDefinedResult
+  public class StatusResult(int statusCode) : IControllerResult
   {
     private readonly int statusCode = statusCode;
 

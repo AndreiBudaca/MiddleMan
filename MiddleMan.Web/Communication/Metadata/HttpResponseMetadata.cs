@@ -6,6 +6,13 @@
 
     public Dictionary<string, string?> Headers { get; set; } = [];
 
+    public HttpResponseMetadata() { }
+
+    public HttpResponseMetadata(int responseCode)
+    {
+      ResponseCode = responseCode;
+    }
+
     public void Apply(HttpResponse response)
     {
       response.StatusCode = ResponseCode;

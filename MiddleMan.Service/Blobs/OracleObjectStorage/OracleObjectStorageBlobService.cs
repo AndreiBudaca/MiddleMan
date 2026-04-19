@@ -45,7 +45,7 @@ namespace MiddleMan.Service.Blobs.OracleObjectStorage
 
       try
       {
-        using var blobStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.ReadWrite, FileShare.None, ServerCapabilities.MaxContentLength, useAsync: true);
+        using var blobStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.ReadWrite, FileShare.None, ServerCapabilities.MaxChunkSize, useAsync: true);
         await foreach (var b in data.WithCancellation(cancellationToken))
         {
           await blobStream.WriteAsync(b.AsMemory(0, b.Length), cancellationToken);

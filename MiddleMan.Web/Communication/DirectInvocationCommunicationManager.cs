@@ -1,21 +1,18 @@
 using Microsoft.AspNetCore.SignalR;
-using MiddleMan.Core;
+using MiddleMan.Core.Extensions;
 using MiddleMan.Web.Communication.ClientContracts;
 using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Communication
 {
-  public class DirectInvocationCommunicationManager(HttpRequest request, HttpUser? user, bool sendMetadata = false)
+  public class DirectInvocationCommunicationManager(IAsyncEnumerable<byte[]> body, HttpRequestMetadata metadata, bool sendMetadata = false)
   {
     public async Task<DirectInvocationResponse> InvokeAsync(ISingleClientProxy clientProxy, string method, CancellationToken cancellationToken)
     {
-      var buffer = new byte[request.ContentLength ?? 0];
-      await request.Body.ReadAsync(buffer, cancellationToken);
-
       var payload = new DirectInvocationData
       {
-        Metadata = sendMetadata ? new HttpRequestMetadata(request, user) : null,
-        Data = buffer
+        Metadata = sendMetadata ? metadata : null,
+        Data = await body.ReadAllBytes(cancellationToken)
       };
 
       return await clientProxy.InvokeAsync<DirectInvocationResponse>(method, payload, cancellationToken);

@@ -45,7 +45,7 @@ namespace MiddleMan.Communication
       );
     }
 
-    public Task WriteAsync(IDataWriterAdapter adapter, Guid correlation, CancellationToken cancellationToken = default)
+    public Task WriteAsync(IDataWriterAdaptor adapter, Guid correlation, CancellationToken cancellationToken = default)
     {
       return WriteAsync(adapter.Adapt(), correlation, cancellationToken);
     }
@@ -95,7 +95,7 @@ namespace MiddleMan.Communication
       using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
       {
         cts.CancelAfter(TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds));
-        
+
         reader = await sessionReadMonitor.WaitToGetResource
         (
           async () => context.GetFromHash<ChannelReader<byte[]>>("readers", correlation.ToString()),
@@ -113,6 +113,8 @@ namespace MiddleMan.Communication
       {
         await foreach (var chunk in reader.ReadAllAsync(cancellationToken))
         {
+          if (chunk == null) throw new InvalidDataException("Received null chunk from reader.");
+          
           yield return chunk;
         }
       }

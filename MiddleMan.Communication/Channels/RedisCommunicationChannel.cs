@@ -99,6 +99,14 @@ namespace MiddleMan.Communication.Channels
       ]);
     }
 
+    public Task TerminateWithErrorAsync(string streamKey, string errorMessage)
+    {
+      return database.StreamAddAsync(streamKey, [
+        new NameValueEntry("type", "error"),
+        new NameValueEntry("data", errorMessage)
+      ]);
+    }
+
     public Task SignalStreamEndAsync(string streamKey)
     {
       return database.StreamAddAsync(streamKey, [
@@ -200,6 +208,7 @@ namespace MiddleMan.Communication.Channels
           var messageId = (string)messageParts![0]!;
           var fields = (RedisResult[])messageParts[1]!;
           // fields layout: ["type", <typeValue>, "data", <dataValue>] for data entries
+          // fields layout: ["type", "error", "data", <errorMessage>] for error entries
           //                 ["type", "end"] for sentinel entries
           var type = (string)fields![1]!;
 
@@ -208,6 +217,10 @@ namespace MiddleMan.Communication.Channels
           if (type == "end")
           {
             streamEnded = true;
+          }
+          else if (type == "error")
+          {
+            throw new Exception((string)fields[3]!);
           }
           else
           {
