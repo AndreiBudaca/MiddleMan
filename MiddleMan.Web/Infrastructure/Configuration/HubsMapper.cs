@@ -1,4 +1,5 @@
-﻿using MiddleMan.Core;
+﻿using Microsoft.AspNetCore.Http.Connections;
+using MiddleMan.Core;
 using MiddleMan.Web.Hubs;
 
 namespace MiddleMan.Web.Infrastructure.Configuration
@@ -11,6 +12,9 @@ namespace MiddleMan.Web.Infrastructure.Configuration
       {
         options.TransportMaxBufferSize = ServerCapabilities.MaxContentLength;
         options.ApplicationMaxBufferSize = ServerCapabilities.MaxContentLength;
+        options.Transports = HttpTransportType.WebSockets;
+        options.AllowStatefulReconnects = false;
+        options.CloseOnAuthenticationExpiration = true;
       });
     }
   }
