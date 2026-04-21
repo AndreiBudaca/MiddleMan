@@ -56,6 +56,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
       var retryCount = 1;
       var wasSuccessfulInvocation = false;
 
+      using var communicationFailedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
       do
       {
         if (retryCount > 1)
@@ -63,7 +64,8 @@ namespace MiddleMan.Web.Controllers.WebSockets
           logger.LogWarning("Retrying invocation for {WebSocketClientName}, method: {Method}. Attempt {RetryCount} of {MaxRetryAttempts}", webSocketClientName, method, retryCount, ServerCapabilities.MaxRetryAttempts);
         }
 
-        var clientConnection = await GetClientConnection(webSocketClientName);
+        communicationFailedCts.TryReset();
+        var clientConnection = await GetClientConnection(webSocketClientName, communicationFailedCts.Token);
 
         if (string.IsNullOrWhiteSpace(clientConnection?.ConnectionId))
         {
@@ -88,10 +90,10 @@ namespace MiddleMan.Web.Controllers.WebSockets
 
         try
         {
-          var (responseMetadata, responseData) = await invoker.Invoke(bufferedRequest.Read(cancellationToken), metadata, method, clientConnection, hubClient, cancellationToken);
-          bufferedResponse = await BufferResponse(responseData, cancellationToken);
+          var (responseMetadata, responseData) = await invoker.Invoke(bufferedRequest.Read(communicationFailedCts.Token), metadata, method, clientConnection, hubClient, communicationFailedCts.Token);
+          bufferedResponse = await BufferResponse(responseData, communicationFailedCts.Token);
 
-          var result = new MiddleManClientResult(responseMetadata, bufferedResponse?.Read(cancellationToken), cancellationToken);
+          var result = new MiddleManClientResult(responseMetadata, bufferedResponse?.Read(communicationFailedCts.Token), communicationFailedCts.Token);
           await result.ApplyResultAsync(HttpContext);
 
           await invoker.Cleanup();
@@ -105,6 +107,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
         {
           logger.LogError("Invocation error for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}. Error: {ErrorMessage}", webSocketClientName, method, clientConnection.ConnectionId, ex.Message);
 
+          await communicationFailedCts.CancelAsync();
           if (bufferedResponse != null)
           {
             await bufferedResponse.DisposeAsync();
