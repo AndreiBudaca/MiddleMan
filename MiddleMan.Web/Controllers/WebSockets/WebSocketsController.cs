@@ -18,7 +18,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
 {
   [Authorize]
   [Route("api/websockets")]
-  [DisableFormValueModelBinding]
+  [DisableModelBinding]
   public class WebSocketsController(
     IHubContext<PlaygroundHub> hubContext,
     StreamingCommunicationManager streamingCommunicationManager,

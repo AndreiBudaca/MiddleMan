@@ -4,15 +4,15 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace MiddleMan.Web.Infrastructure.Attributes
 {
   [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
-  public class DisableFormValueModelBindingAttribute : Attribute, IResourceFilter
+  public class DisableModelBindingAttribute : Attribute, IResourceFilter
   {
     public void OnResourceExecuting(ResourceExecutingContext context)
     {
       var factories = context.ValueProviderFactories;
 
-      // Remove the factories that read form data
-      factories.RemoveType<FormValueProviderFactory>();
-      factories.RemoveType<JQueryFormValueProviderFactory>();
+      // Keep only non-body value providers so request stream remains untouched.
+      factories.Clear();
+      factories.Add(new RouteValueProviderFactory());
     }
 
     public void OnResourceExecuted(ResourceExecutedContext context)
