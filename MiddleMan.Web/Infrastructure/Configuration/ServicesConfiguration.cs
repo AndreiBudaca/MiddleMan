@@ -23,6 +23,7 @@ namespace MiddleMan.Web.Infrastructure.Configuration
 
       // Repositories
       services.AddScoped<IClientRepository, ClientRepository>();
+      services.AddScoped<IClientShareRepository, ClientShareRepository>();
 
       // Add services
       services.AddScoped(service =>

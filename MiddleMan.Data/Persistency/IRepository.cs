@@ -5,6 +5,7 @@ namespace MiddleMan.Data.Persistency
   public interface IRepository<T, K>
   {
     Task<IEnumerable<T>> GetAllAsync();
+    Task<IEnumerable<T>> GetByIds(IEnumerable<K> keys);
     Task<IEnumerable<T>> GetByConditions(List<ColumnInfo> searchValues);
     Task<T?> GetByIdAsync(K key);
     Task<bool> ExistsAsync(K key);

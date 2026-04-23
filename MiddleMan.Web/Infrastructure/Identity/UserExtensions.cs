@@ -14,5 +14,10 @@ namespace MiddleMan.Web.Infrastructure.Identity
     {
       return user.Claims.FirstOrDefault(claim => claim.Type == ClaimTypes.Name)?.Value ?? string.Empty;
     }
+
+    public static string Email(this ClaimsPrincipal user)
+    {
+      return user.Claims.FirstOrDefault(claim => claim.Type == ClaimTypes.Email)?.Value ?? string.Empty;
+    }
   }
 }

@@ -11,15 +11,17 @@ import type { ClientMethod } from "~/contracts/clientMethods";
 import CodeEditor from "./jsonView/codeEditor";
 import { useEffect, useState } from "react";
 import { mapToJsonTemplate } from "~/mappers/clientMethodArgumentsMapper";
-import { callClientMethod } from "~/services/clients/clientService";
+import { callClientMethod, getClientPortalUrl } from "~/services/clients/clientService";
 
 export interface MethodsViewProps {
+  userId: string;
   client: string | null | undefined;
   method: ClientMethod | null;
   isCallable: boolean;
 }
 
 export default function MethodsView({
+  userId,
   client,
   method,
   isCallable,
@@ -54,6 +56,7 @@ export default function MethodsView({
     setResult(null);
 
     const result = await callClientMethod(
+      userId,
       client,
       method?.name,
       isBinaryMethod,
@@ -88,9 +91,12 @@ export default function MethodsView({
           />
         )}
         {method && isCallable && (
-          <Box marginTop="15px">
+          <Box marginTop="15px" width="80%" display="flex" justifyContent="space-between" gap="10px">
             <Button variant="contained" onClick={invokeMethod}>
               Call
+            </Button>
+            <Button variant="contained" onClick={() => window.open(getClientPortalUrl(userId, client || "", method.name), "_blank")}>
+              Open in new tab
             </Button>
           </Box>
         )}

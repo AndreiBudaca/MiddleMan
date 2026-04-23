@@ -32,7 +32,7 @@ export default function ClientsTable() {
 
   useEffect(() => {
     const fetchClients = async () => {
-      const result = await getClients();
+      const result = await getClients(true);
       setClients(result);
     };
     fetchClients();
@@ -93,7 +93,7 @@ export default function ClientsTable() {
             <ClientHeader />
             <TableBody>
               {clients.map((client) => (
-                <ClientRow client={client} onDelete={removeClient} />
+                <ClientRow key={client.name} client={client} onDelete={removeClient} />
               ))}
               {newClients.map((key) => (
                 <NewClientRow

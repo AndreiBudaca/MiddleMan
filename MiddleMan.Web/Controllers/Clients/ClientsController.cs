@@ -3,14 +3,12 @@ using Microsoft.AspNetCore.Mvc;
 using MiddleMan.Communication;
 using MiddleMan.Core;
 using MiddleMan.Service.WebSocketClientConnections;
-using MiddleMan.Service.WebSocketClientConnections.Classes;
 using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Service.WebSocketClients.Dto;
 using MiddleMan.Web.Controllers.Clients.Model;
 using MiddleMan.Web.Infrastructure.Identity;
 using MiddleMan.Web.Infrastructure.Tokens;
 using MiddleMan.Web.Infrastructure.Tokens.Model;
-using Org.BouncyCastle.Crypto.Prng;
 
 namespace MiddleMan.Web.Controllers.Clients
 {
@@ -28,9 +26,9 @@ namespace MiddleMan.Web.Controllers.Clients
     private readonly IConfiguration configuration = configuration;
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] bool onlyOwned = false)
     {
-      var clients = await webSocketClientsService.GetWebSocketClients(User.Identifier());
+      var clients = await webSocketClientsService.GetWebSocketClients(User.Identifier(), User.Email(), onlyOwned);
       var model = clients.Select(BuildModel);
 
       return Ok(model);
@@ -39,21 +37,22 @@ namespace MiddleMan.Web.Controllers.Clients
     [HttpGet("connection-status")]
     public async Task<IActionResult> GetConnectionStatus()
     {
-      var clients = await webSocketClientsService.GetWebSocketClients(User.Identifier());
+      var clients = await webSocketClientsService.GetWebSocketClients(User.Identifier(), User.Email());
 
       var clientConnectionStatuses = await Task.WhenAll(clients
-        .Where(c => c != null && c.Name != null)
+        .Where(c => c != null && c.Name != null && c.UserId != null)
         .Select(async client =>
         {
-          var clientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), client.Name!);
+          var clientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(client.UserId!, client.Name!);
 
           if (clientConnection == null && ServerCapabilities.ClusterMode)
           {
-            clientConnection = await clientInfoCommunicationManager.QueryClientConnection(User.Identifier(), client.Name!);
+            clientConnection = await clientInfoCommunicationManager.QueryClientConnection(client.UserId!, client.Name!);
           }
 
           return new WebSocketClientConnectionStatusModel
           {
+            UserId = client.UserId,
             Name = client.Name,
             IsConnected = clientConnection != null,
           };
@@ -78,6 +77,42 @@ namespace MiddleMan.Web.Controllers.Clients
       });
 
       return Created((string?)null, BuildModel(newClient));
+    }
+
+    [HttpPost("{clientName}/share")]
+    public async Task<IActionResult> AddClientShare([FromRoute] string clientName, [FromBody] WebSocketSharedWithModel model)
+    {
+      if (!await webSocketClientsService.ExistsWebSocketClients(User.Identifier(), clientName))
+      {
+        return NotFound();
+      }
+
+      if (await webSocketClientsService.ExistsWebSocketClientShares(User.Identifier(), clientName, model.SharedWithUserEmail))
+      {
+        return Conflict("A share with the same email already exists");
+      }
+
+      await webSocketClientsService.AddWebSocketClientShare(User.Identifier(), clientName, model.SharedWithUserEmail);
+
+      return Ok();
+    }
+
+    [HttpDelete("{clientName}/share/{sharedWithUserEmail}")]
+    public async Task<IActionResult> DeleteClientShare([FromRoute] string clientName, [FromRoute] string sharedWithUserEmail)
+    {
+      if (!await webSocketClientsService.ExistsWebSocketClients(User.Identifier(), clientName))
+      {
+        return NotFound();
+      }
+
+      if (!await webSocketClientsService.ExistsWebSocketClientShares(User.Identifier(), clientName, sharedWithUserEmail))
+      {
+        return NotFound();
+      }
+
+      await webSocketClientsService.DeleteWebSocketClientShare(User.Identifier(), clientName, sharedWithUserEmail);
+
+      return NoContent();
     }
 
     [HttpDelete("{clientName}")]
@@ -139,10 +174,12 @@ namespace MiddleMan.Web.Controllers.Clients
     {
       return new WebSocketClientModel
       {
+        UserId = client.UserId,
         Name = client.Name,
         MethodsUrl = client.MethodsUrl,
         Signature = client.Signature != null ? Convert.ToBase64String(client.Signature) : null,
         TokenHash = client.TokenHash != null ? Convert.ToBase64String(client.TokenHash) : null,
+        SharedWithUserEmails = client.SharedWithUserEmails,
       };
     }
   }

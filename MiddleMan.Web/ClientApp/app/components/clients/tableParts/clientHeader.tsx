@@ -6,6 +6,7 @@ export function ClientHeader() {
     "Status",
     "Methods hash",
     "Token hash",
+    "Shared with",
     "Actions",
   ];
 

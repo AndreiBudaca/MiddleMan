@@ -27,6 +27,7 @@ export function NewClientRow({ clientKey, onSave, onRemove }: NewClientRowProps)
       <TableCell align="right"></TableCell>
       <TableCell align="right"></TableCell>
       <TableCell align="right"></TableCell>
+      <TableCell align="right"></TableCell>
       <TableCell align="right">
         <IconButton onClick={() => onSave(clientKey, name)}>
             <CheckIcon/>

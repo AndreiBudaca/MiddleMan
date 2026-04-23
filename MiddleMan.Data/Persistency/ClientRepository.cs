@@ -38,6 +38,26 @@ namespace MiddleMan.Data.Persistency
       return await connection.QueryAsync<Client>(query);
     }
 
+    public async Task<IEnumerable<Client>> GetByIds(IEnumerable<(string clientId, string name)> keys)
+    {
+      if (!keys.Any()) return [];
+
+      var whereClauses = string.Join(" OR ", keys.Select((k, i) => $"({Client.Columns.UserId} = @clientId{i} AND {Client.Columns.Name} = @name{i})"));
+      var query = $"SELECT * FROM Clients WHERE {whereClauses};";
+
+      var parameters = new DynamicParameters();
+
+      int index = 0;
+      foreach (var (clientId, name) in keys)
+      {
+        parameters.Add($"clientId{index}", clientId);
+        parameters.Add($"name{index}", name);
+        index++;
+      }
+
+      return await connection.QueryAsync<Client>(query, parameters);
+    }
+
     public async Task<Client?> GetByIdAsync((string clientId, string name) key)
     {
       var query = $"SELECT * FROM Clients WHERE {Client.Columns.UserId} = @clientId AND {Client.Columns.Name} = @name;";

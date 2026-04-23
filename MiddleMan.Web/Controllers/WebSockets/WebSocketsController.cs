@@ -5,6 +5,7 @@ using MiddleMan.Communication;
 using MiddleMan.Core;
 using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
+using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Web.Communication.Adapters;
 using MiddleMan.Web.Communication.ClientInvocator;
 using MiddleMan.Web.Communication.Metadata;
@@ -17,9 +18,10 @@ using MiddleMan.Web.Resiliency;
 namespace MiddleMan.Web.Controllers.WebSockets
 {
   [Authorize]
-  [Route("api/websockets")]
+  [Route("client-portal")]
   [DisableModelBinding]
   public class WebSocketsController(
+    IWebSocketClientsService webSocketClientsService,
     IHubContext<PlaygroundHub> hubContext,
     StreamingCommunicationManager streamingCommunicationManager,
     IntraServerCommunicationManager intraServerCommunicationManager,
@@ -27,6 +29,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
     IWebSocketClientConnectionsService webSocketClientConnectionsService,
     ILogger<WebSocketsController> logger) : Controller
   {
+    private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
     private readonly IHubContext<PlaygroundHub> hubContext = hubContext;
     private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
     private readonly StreamingCommunicationManager streamingCommunicationManager = streamingCommunicationManager;
@@ -35,8 +38,8 @@ namespace MiddleMan.Web.Controllers.WebSockets
     private readonly ILogger<WebSocketsController> logger = logger;
 
     [RequestSizeLimit(1_000_000_000)]
-    [Route("{webSocketClientName}/{method}/{*rest}")]
-    public async Task Send([FromRoute] string webSocketClientName, [FromRoute] string method, CancellationToken cancellationToken)
+    [Route("{userId}/{webSocketClientName}/{method}/{*rest}")]
+    public async Task Send([FromRoute] string userId, [FromRoute] string webSocketClientName, [FromRoute] string method, CancellationToken cancellationToken)
     {
       if (string.IsNullOrWhiteSpace(webSocketClientName) || string.IsNullOrWhiteSpace(method))
       {
@@ -48,6 +51,17 @@ namespace MiddleMan.Web.Controllers.WebSockets
       {
         await new StatusResult(StatusCodes.Status411LengthRequired).ApplyResultAsync(HttpContext);
         return;
+      }
+
+      if (userId != null && userId != User.Identifier())
+      {
+        var isAllowed = await webSocketClientsService.ExistsWebSocketClientShares(userId, webSocketClientName, User.Email());
+
+        if (!isAllowed)
+        {
+          await new StatusResult(StatusCodes.Status403Forbidden).ApplyResultAsync(HttpContext);
+          return;
+        }
       }
 
       var (bufferedRequest, metadata) = ProcessRequest(HttpContext.Request);
@@ -65,7 +79,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
         }
 
         communicationFailedCts.TryReset();
-        var clientConnection = await GetClientConnection(webSocketClientName, communicationFailedCts.Token);
+        var clientConnection = await GetClientConnection(userId ?? User.Identifier(), webSocketClientName, communicationFailedCts.Token);
 
         if (string.IsNullOrWhiteSpace(clientConnection?.ConnectionId))
         {
@@ -76,7 +90,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
         var hubClient = hubContext.Clients.Client(clientConnection.ConnectionId);
         if (hubClient == null)
         {
-          webSocketClientConnectionsService.DeleteWebSocketClientConnection(User.Identifier(), webSocketClientName, clientConnection.ConnectionId);
+          webSocketClientConnectionsService.DeleteWebSocketClientConnection(userId ?? User.Identifier(), webSocketClientName, clientConnection.ConnectionId);
           // TO DO: also delete from other servers in cluster
           await new StatusResult(StatusCodes.Status404NotFound).ApplyResultAsync(HttpContext);
           return;
@@ -155,16 +169,16 @@ namespace MiddleMan.Web.Controllers.WebSockets
       return new NoBuffer(responseData);
     }
 
-    private async Task<ClientConnection?> GetClientConnection(string webSocketClientName, CancellationToken cancellationToken = default)
+    private async Task<ClientConnection?> GetClientConnection(string userId, string webSocketClientName, CancellationToken cancellationToken = default)
     {
-      var clientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), webSocketClientName);
+      var clientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(userId, webSocketClientName);
 
       if (clientConnection == null && ServerCapabilities.ClusterMode)
       {
-        clientConnection = await clientInfoCommunicationManager.QueryClientConnection(User.Identifier(), webSocketClientName, cancellationToken);
+        clientConnection = await clientInfoCommunicationManager.QueryClientConnection(userId, webSocketClientName, cancellationToken);
 
         // double check after querying other servers in cluster (in case the client connection was established while we were querying other servers)
-        clientConnection ??= webSocketClientConnectionsService.GetWebSocketClientConnection(User.Identifier(), webSocketClientName);
+        clientConnection ??= webSocketClientConnectionsService.GetWebSocketClientConnection(userId, webSocketClientName);
       }
 
       return clientConnection;

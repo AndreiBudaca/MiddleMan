@@ -25,7 +25,9 @@ export function mapToTreeNodes(
 
   return clients
     .map((c) => {
-      const connectionStatus = clientsConnectionStatus.find(s => s.name == c.name);
+      const connectionStatus = clientsConnectionStatus.find(
+        (s) => s.name === c.name && s.userId === c.userId
+      );
       const isConnected = connectionStatus ? connectionStatus.isConnected : false;
       
       return {

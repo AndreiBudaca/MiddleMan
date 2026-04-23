@@ -10,26 +10,32 @@ import type {
 import type { ClientMethod } from "../../contracts/clientMethods";
 import { mapClientMethod } from "~/mappers/clientMethodMapper";
 
-export async function createClient(client: ClientName): Promise<Client | null> {
-  const result = await POST(`${env.API_BASE_URL}/clients`, client);
-  return await result?.json();
+function mapClient(data: any): Client {
+  return {
+    userId: data.userId,
+    name: data.name,
+    methodsUrl: data.methodsUrl,
+    isConnected: false,
+    signature: data.signature,
+    tokenHash: data.tokenHash,
+    sharedWithUserEmails: data.sharedWithUserEmails ?? [],
+  };
 }
 
-export async function getClients(): Promise<Client[]> {
-  const result = await GET(`${env.API_BASE_URL}/clients`);
+export async function createClient(client: ClientName): Promise<Client | null> {
+  const result = await POST(`${env.API_BASE_URL}/clients`, client);
+  if (!result) return null;
+
+  return mapClient(await result.json());
+}
+
+export async function getClients(onlyOwned: boolean = false): Promise<Client[]> {
+  const result = await GET(`${env.API_BASE_URL}/clients?onlyOwned=${onlyOwned}`);
 
   try {
     const data = ((await result?.json()) ?? []) as any[];
 
-    const clients = data.map((d) => {
-      return {
-        name: d.name,
-        methodsUrl: d.methodsUrl,
-        isConnected: false,
-        signature: d.signature,
-        tokenHash: d.tokenHash,
-      };
-    });
+    const clients = data.map((d) => mapClient(d));
 
     clients.sort((a, b) => (a.name > b.name ? 1 : -1));
 
@@ -49,6 +55,7 @@ export async function getClientsConnectionStatus(): Promise<ClientConnectionStat
 
     return data.map((d) => {
       return {
+        userId: d.userId,
         name: d.name,
         isConnected: d.isConnected,
       };
@@ -63,6 +70,25 @@ export async function getClientsConnectionStatus(): Promise<ClientConnectionStat
 
 export async function deleteClient(client: ClientName): Promise<boolean> {
   const response = await DELETE(`${env.API_BASE_URL}/clients/${client.name}`);
+  return response != null;
+}
+
+export async function addClientShare(client: ClientName, email: string): Promise<boolean> {
+  const response = await POST(
+    `${env.API_BASE_URL}/clients/${encodeURIComponent(client.name)}/share`,
+    {
+      sharedWithUserEmail: email,
+    }
+  );
+
+  return response != null;
+}
+
+export async function deleteClientShare(client: ClientName, email: string): Promise<boolean> {
+  const response = await DELETE(
+    `${env.API_BASE_URL}/clients/${encodeURIComponent(client.name)}/share/${encodeURIComponent(email)}`
+  );
+
   return response != null;
 }
 
@@ -88,6 +114,7 @@ export async function deleteClientToken(
 }
 
 export async function callClientMethod(
+  userId: string,
   client: string,
   method: string,
   isBinaryData: boolean,
@@ -99,7 +126,7 @@ export async function callClientMethod(
   
   if (isBinaryData) {
     result = await POST_RAW(
-      `${env.API_BASE_URL}/websockets/${client}/${method}`,
+      `${env.APP_BASE_URL}/client-portal/${userId}/${client}/${method}`,
       data
     );  
   } else {
@@ -110,7 +137,7 @@ export async function callClientMethod(
     }
 
     result = await POST(
-      `${env.API_BASE_URL}/websockets/${client}/${method}`,
+      `${env.APP_BASE_URL}/client-portal/${userId}/${client}/${method}`,
       formattedData
     );
   }
@@ -123,6 +150,10 @@ export async function callClientMethod(
   }
 
   return await result.json();
+}
+
+export function getClientPortalUrl( userId: string, client: string, method: string): string {
+  return `${env.APP_BASE_URL}/client-portal/${userId}/${client}/${method}`;
 }
 
 export async function getClientsWithMethods(): Promise<ClientWithMethods[]> {

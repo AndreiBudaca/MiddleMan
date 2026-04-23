@@ -7,13 +7,17 @@ export interface ClientName
 
 export interface ClientConnectionStatus extends ClientName
 {
+  userId: string;
   isConnected: boolean;
 }
 
 export interface Client extends ClientName {
+  userId: string;
+  isConnected: boolean;
   methodsUrl: string | null;
   signature: string | null;
   tokenHash: string | null;
+  sharedWithUserEmails: string[];
 }
 
 export interface ClientWithMethods extends Client {

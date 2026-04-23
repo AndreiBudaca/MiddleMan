@@ -82,6 +82,7 @@ export default function DashboardClients() {
         onNodeSelected={onSelectedMethodChange}
       />
       <MethodsView
+        userId={selectedClient?.userId ?? ""}
         client={selectedClient?.name}
         method={selectedMethod}
         isCallable={isSelectedClientConnected}
