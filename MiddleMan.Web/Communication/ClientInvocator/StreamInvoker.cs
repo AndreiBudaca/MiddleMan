@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Communication;
 using MiddleMan.Communication.Adapters;
+using MiddleMan.Core;
 using MiddleMan.Core.Extensions;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
 using MiddleMan.Web.Communication.Adapters;
@@ -29,7 +30,11 @@ namespace MiddleMan.Web.Communication.ClientInvocator
     {
       var adapter = new MetadataAdaptorDecorator(data, metadata, webSocketClientConnection.ClientCapabilities.SendHTTPMetadata);
 
-      logger.LogInformation("Starting stream invocation. Correlation ID: {CorrelationId}, Method: {Method}, IsSameServerConnection: {IsSameServerConnection}", correlation, method, webSocketClientConnection.SameServerConnection);
+      if (ServerCapabilities.VerboseLogging)
+      {
+        logger.LogInformation("Starting stream invocation. Correlation ID: {CorrelationId}, Method: {Method}, IsSameServerConnection: {IsSameServerConnection}", correlation, method, webSocketClientConnection.SameServerConnection);
+      }
+
       await intraServerCommunicationManager.RegisterRequestSession(correlation, webSocketClientConnection.SameServerConnection);
       await hubClient.SendAsync(method, correlation, cancellationToken);
 

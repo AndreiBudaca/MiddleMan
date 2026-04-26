@@ -96,7 +96,10 @@ namespace MiddleMan.Web.Controllers.WebSockets
           return;
         }
 
-        logger.LogInformation("Invoking {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", webSocketClientName, method, clientConnection.ConnectionId);
+        if (ServerCapabilities.VerboseLogging)
+        {
+          logger.LogInformation("Invoking {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", webSocketClientName, method, clientConnection.ConnectionId);
+        }
 
         IClientInvoker invoker = clientConnection.ClientCapabilities.SupportsStreaming ?
           new StreamInvoker(intraServerCommunicationManager, streamingCommunicationManager, logger) :
@@ -114,7 +117,11 @@ namespace MiddleMan.Web.Controllers.WebSockets
           await bufferedRequest.DisposeAsync();
           if (bufferedResponse != null) await bufferedResponse.DisposeAsync();
 
-          logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", webSocketClientName, method, clientConnection.ConnectionId);
+          if (ServerCapabilities.VerboseLogging)
+          {
+            logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", webSocketClientName, method, clientConnection.ConnectionId);
+          }
+          
           return;
         }
         catch (Exception ex)

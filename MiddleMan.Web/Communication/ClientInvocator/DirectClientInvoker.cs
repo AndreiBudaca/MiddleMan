@@ -27,7 +27,10 @@ namespace MiddleMan.Web.Communication.ClientInvocator
         return (new HttpResponseMetadata(StatusCodes.Status413PayloadTooLarge), null);
       }
 
-      logger.LogInformation("Starting direct invocation. Method: {Method}, IsSameServerConnection: {IsSameServerConnection}", method, webSocketClientConnection.SameServerConnection);
+      if (ServerCapabilities.VerboseLogging)
+      {
+        logger.LogInformation("Starting direct invocation. Method: {Method}, IsSameServerConnection: {IsSameServerConnection}", method, webSocketClientConnection.SameServerConnection);
+      }
      
       var communicationManager = new DirectInvocationCommunicationManager(data, metadata, webSocketClientConnection.ClientCapabilities.SendHTTPMetadata);
       var response = await communicationManager.InvokeAsync(hubClient, method, cancellationToken);

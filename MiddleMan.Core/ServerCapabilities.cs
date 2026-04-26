@@ -18,6 +18,8 @@
 
     public static readonly int MaxRetryAttempts = int.TryParse(Environment.GetEnvironmentVariable("MIDDLEMAN_MAX_RETRY_ATTEMPTS"), out int maxRetryAttempts) ? maxRetryAttempts : 3;
 
+    public static readonly bool VerboseLogging = Environment.GetEnvironmentVariable("MIDDLEMAN_VERBOSE_LOGGING") == "true";
+
     public static readonly int[] AllowedVersions = [0];
 
     public static readonly string StaticFilesPath = Environment.GetEnvironmentVariable("MIDDLEMAN_LOCAL_BLOB_PATH") ?? $"{Directory.GetCurrentDirectory()}/blobs";
