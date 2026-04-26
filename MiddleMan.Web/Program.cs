@@ -87,7 +87,7 @@ namespace MiddleMan.Web
 
       app.UseProxy();
 
-      app.MapStaticFiles(ServerCapabilities.UIStaticFilesPath, ServerCapabilities.StaticFilesPath);
+      app.MapStaticFiles(ServerCapabilities.UIStaticFilesPath);
 
       app.UseRouting();
 

@@ -2,12 +2,18 @@
 using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Communication;
 using MiddleMan.Core;
+using MiddleMan.Core.Extensions;
 using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
 using MiddleMan.Service.WebSocketClientMethods;
 using MiddleMan.Service.WebSocketClients;
+using MiddleMan.Web.Communication.ClientContracts;
+using MiddleMan.Web.Communication.ClientInvocator;
+using MiddleMan.Web.Communication.Metadata;
+using MiddleMan.Web.Communication.Metadata.Constants;
 using MiddleMan.Web.Hubs.Models;
 using MiddleMan.Web.Infrastructure.Identity;
+using MiddleMan.Web.Resiliency;
 using System.Threading.Channels;
 
 namespace MiddleMan.Web.Hubs
@@ -32,7 +38,7 @@ namespace MiddleMan.Web.Hubs
     #region [Clinet connection hooks]
     public override async Task OnConnectedAsync()
     {
-      var (id, name, clientToken, clientId) = GetClientInfoFromContext();
+      var (id, name, _, clientToken, clientId) = GetClientInfoFromContext();
 
       if (string.IsNullOrWhiteSpace(clientId))
       {
@@ -59,7 +65,7 @@ namespace MiddleMan.Web.Hubs
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-      var (id, name, _, clientId) = GetClientInfoFromContext();
+      var (id, name, _, _, clientId) = GetClientInfoFromContext();
 
       if (string.IsNullOrWhiteSpace(clientId))
       {
@@ -86,7 +92,7 @@ namespace MiddleMan.Web.Hubs
     #region [Server info methods]
     public async Task Methods(ChannelReader<byte[]> channelReader)
     {
-      var (id, name, _, clientId) = GetClientInfoFromContext();
+      var (id, name, _, _, clientId) = GetClientInfoFromContext();
 
       await ConnectionChecks(id, name, clientId);
 
@@ -95,7 +101,7 @@ namespace MiddleMan.Web.Hubs
 
     public async Task MethodsRaw(byte[] methodsBytes)
     {
-      var (id, name, _, clientId) = GetClientInfoFromContext();
+      var (id, name, _, _, clientId) = GetClientInfoFromContext();
 
       await ConnectionChecks(id, name, clientId);
 
@@ -104,7 +110,7 @@ namespace MiddleMan.Web.Hubs
 
     public async Task<ServerInfoModel> Negociate(ClientInfoModel clientInfo)
     {
-      var (id, name, _, clientId) = GetClientInfoFromContext();
+      var (id, name, _, _, clientId) = GetClientInfoFromContext();
       await ConnectionChecks(id, name, clientId);
 
       if (clientInfo == null) return new ServerInfoModel { IsAccepted = false };
@@ -135,7 +141,7 @@ namespace MiddleMan.Web.Hubs
     #region [Communication methods]
     public async Task AddReadChannel(Guid correlation, ChannelReader<byte[]> channelReader)
     {
-      var (id, name, _, clientId) = GetClientInfoFromContext();
+      var (id, name, _, _, clientId) = GetClientInfoFromContext();
       await ConnectionChecks(id, name, clientId);
 
       var sameServerInvocation = intraServerCommunicationManager.ExistsRequestSession(correlation);
@@ -159,13 +165,82 @@ namespace MiddleMan.Web.Hubs
 
     public async Task<ChannelReader<byte[]>> SubscribeToServer(Guid correlation)
     {
-      var (id, name, _, clientId) = GetClientInfoFromContext();
+      var (id, name, _, _, clientId) = GetClientInfoFromContext();
       await ConnectionChecks(id, name, clientId);
 
       var channel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(1));
       await communicationManager.RegisterSessionWriterChannelAsync(channel.Writer, correlation);
 
       return channel.Reader;
+    }
+
+    public async Task<DirectInvocationResponse> Invoke(string? userId, string clientName, string method, DirectInvocationData clientData)
+    {
+      var (id, _, email, _, _) = GetClientInfoFromContext();
+
+      if (userId != null && userId != id)
+      {
+        var isAllowed = await webSocketClientsService.ExistsWebSocketClientShares(userId, clientName, email);
+        if (!isAllowed) throw new HubException("Not allowed to invoke this method");
+      }
+
+      var retryCount = 1;
+      var wasSuccessfulInvocation = false;
+      using var communicationFailedCts = new CancellationTokenSource();
+
+      do
+      {
+        if (retryCount > 1)
+        {
+          logger.LogWarning("Retrying invocation for {WebSocketClientName}, method: {Method}. Attempt {RetryCount} of {MaxRetryAttempts}", clientName, method, retryCount, ServerCapabilities.MaxRetryAttempts);
+        }
+
+        communicationFailedCts.TryReset();
+        var clientConnection = await GetClientConnection(userId ?? id, clientName, communicationFailedCts.Token);
+
+        if (string.IsNullOrWhiteSpace(clientConnection?.ConnectionId)) throw new HubException("Client connection not found");
+
+        var hubClient = Clients.Client(clientConnection.ConnectionId);
+        if (hubClient == null)
+        {
+          webSocketClientConnectionsService.DeleteWebSocketClientConnection(userId ?? id, clientName, clientConnection.ConnectionId);
+          // TO DO: also delete from other servers in cluster
+          throw new HubException("Client connection not found");
+        }
+
+        if (ServerCapabilities.VerboseLogging)
+        {
+          logger.LogInformation("Invoking {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
+        }
+
+        var invoker = new DirectClientInvoker(logger);
+
+        try
+        {
+          var (responseMetadata, responseData) = await invoker.Invoke(clientData.Data.AsAsyncEnumerable(), clientData.Metadata ?? DefaultMetadata(id), method, clientConnection, hubClient, communicationFailedCts.Token);
+          await invoker.Cleanup();
+
+          if (ServerCapabilities.VerboseLogging)
+          {
+            logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
+          }
+          
+          return new DirectInvocationResponse
+          {
+            Metadata = clientConnection.ClientCapabilities.SendHTTPMetadata ? responseMetadata : null,
+            Data = responseData != null ? await responseData.ReadAllBytes(communicationFailedCts.Token) : []
+          };
+        }
+        catch (Exception ex)
+        {
+          logger.LogError("Invocation error for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}. Error: {ErrorMessage}", clientName, method, clientConnection.ConnectionId, ex.Message);
+
+          await communicationFailedCts.CancelAsync();
+          await invoker.Cleanup();
+        }
+      } while (!wasSuccessfulInvocation && ServerCapabilities.FaultToleranceEnabled && retryCount++ < ServerCapabilities.MaxRetryAttempts);
+
+      throw new HubException("Invocation failed after multiple attempts");
     }
     #endregion
 
@@ -187,14 +262,39 @@ namespace MiddleMan.Web.Hubs
       }
     }
 
-    private (string, string, string?, string?) GetClientInfoFromContext()
+    private (string, string, string, string?, string?) GetClientInfoFromContext()
     {
       var id = Context.User!.Identifier();
       var name = Context.User!.Name();
+      var email = Context.User!.Email();
       var clientToken = Context.GetHttpContext()?.Request.Headers.Authorization.FirstOrDefault();
       var clientId = Context.GetHttpContext()?.Request.Headers["X-Client-Identity"].FirstOrDefault();
 
-      return (id, name, clientToken, clientId);
+      return (id, name, email, clientToken, clientId);
     }
+
+    private async Task<ClientConnection?> GetClientConnection(string userId, string webSocketClientName, CancellationToken cancellationToken = default)
+    {
+      var clientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(userId, webSocketClientName);
+
+      if (clientConnection == null && ServerCapabilities.ClusterMode)
+      {
+        clientConnection = await clientInfoCommunicationManager.QueryClientConnection(userId, webSocketClientName, cancellationToken);
+
+        // double check after querying other servers in cluster (in case the client connection was established while we were querying other servers)
+        clientConnection ??= webSocketClientConnectionsService.GetWebSocketClientConnection(userId, webSocketClientName);
+      }
+
+      return clientConnection;
+    }
+
+    private static HttpRequestMetadata DefaultMetadata(string id) => new HttpRequestMetadata
+    {
+      User = new HttpUser
+      {
+        Identifier = id,
+        Role = UserTypes.Client
+      }
+    };
   }
 }
