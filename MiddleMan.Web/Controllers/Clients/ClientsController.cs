@@ -143,6 +143,7 @@ namespace MiddleMan.Web.Controllers.Clients
       {
         Identifier = User.Identifier(),
         Name = clientName,
+        Email = User.Email(),
         Secret = configuration.GetValue<string>(ConfigurationConstants.Authentication.ClientToken.Secret),
       });
 
