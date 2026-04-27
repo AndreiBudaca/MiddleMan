@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.IdentityModel.Protocols;
 using MiddleMan.Communication;
 using MiddleMan.Core;
 using MiddleMan.Core.Extensions;
@@ -14,6 +15,7 @@ using MiddleMan.Web.Communication.Metadata.Constants;
 using MiddleMan.Web.Hubs.Models;
 using MiddleMan.Web.Infrastructure.Identity;
 using MiddleMan.Web.Resiliency;
+using Polly;
 using System.Threading.Channels;
 
 namespace MiddleMan.Web.Hubs
@@ -217,14 +219,14 @@ namespace MiddleMan.Web.Hubs
 
         try
         {
-          var (responseMetadata, responseData) = await invoker.Invoke(clientData.Data.AsAsyncEnumerable(), clientData.Metadata ?? DefaultMetadata(id), method, clientConnection, hubClient, communicationFailedCts.Token);
+          var (responseMetadata, responseData) = await invoker.Invoke(clientData.Data.AsAsyncEnumerable(), ProcessMetadata(clientData, Context), method, clientConnection, hubClient, communicationFailedCts.Token);
           await invoker.Cleanup();
 
           if (ServerCapabilities.VerboseLogging)
           {
             logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
           }
-          
+
           return new DirectInvocationResponse
           {
             Metadata = clientConnection.ClientCapabilities.SendHTTPMetadata ? responseMetadata : null,
@@ -288,13 +290,24 @@ namespace MiddleMan.Web.Hubs
       return clientConnection;
     }
 
-    private static HttpRequestMetadata DefaultMetadata(string id) => new HttpRequestMetadata
+    private static HttpRequestMetadata ProcessMetadata(DirectInvocationData requestData, HubCallerContext context)
     {
-      User = new HttpUser
+      var user = new HttpUser
       {
-        Identifier = id,
+        Identifier = context.User!.Identifier(),
         Role = UserTypes.Client
+      };
+
+      if (requestData.Metadata != null)
+      {
+        requestData.Metadata.User = user;
+        return requestData.Metadata;
       }
-    };
+
+      return new HttpRequestMetadata
+      {
+        User = user,
+      };
+    }
   }
 }

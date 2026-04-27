@@ -20,7 +20,7 @@ namespace MiddleMan.Web.Infrastructure.Tokens
       List<Claim> userClaims =
       [
         new Claim(ClaimTypes.NameIdentifier, data.Identifier),
-        new Claim(ClaimTypes.Name, data.Name)m
+        new Claim(ClaimTypes.Name, data.Name),
         new Claim(ClaimTypes.Email, data.Email)
       ];
 
