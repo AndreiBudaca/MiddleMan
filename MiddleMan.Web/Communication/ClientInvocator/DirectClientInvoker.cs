@@ -54,17 +54,10 @@ namespace MiddleMan.Web.Communication.ClientInvocator
 
     private static bool ValidateLength(HttpRequestMetadata metadata)
     {
-      if (!metadata.Headers.TryGetValue(HeaderNames.ContentLength, out var contentLengthValue))
-      {
-        return false;
-      }
+      _ = metadata.Headers.TryGetValue(HeaderNames.ContentLength, out var contentLengthValue);
+      var canParse = int.TryParse(contentLengthValue, out int contentLength);
 
-      if (!int.TryParse(contentLengthValue, out int contentLength))
-      {
-        return false;
-      }
-
-      return contentLength <= ServerCapabilities.MaxChunkSize;
+      return !canParse || contentLength <= ServerCapabilities.MaxChunkSize;
     }
   }
 }
