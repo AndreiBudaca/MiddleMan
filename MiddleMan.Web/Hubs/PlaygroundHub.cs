@@ -295,6 +295,8 @@ namespace MiddleMan.Web.Hubs
           {
             logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
           }
+          
+          break;
         }
         catch (Exception ex)
         {
