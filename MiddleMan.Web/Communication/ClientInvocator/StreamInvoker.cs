@@ -77,5 +77,10 @@ namespace MiddleMan.Web.Communication.ClientInvocator
 
       return (metadata, data);
     }
+
+    public Task Send(IAsyncEnumerable<byte[]> data, HttpRequestMetadata metadata, string method, ClientConnection webSocketClientConnection, ISingleClientProxy hubClient, CancellationToken cancellationToken)
+    {
+      throw new NotImplementedException();
+    }
   }
 }

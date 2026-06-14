@@ -245,6 +245,69 @@ namespace MiddleMan.Web.Hubs
       throw new HubException("Invocation failed after multiple attempts");
     }
 
+    public async Task Send(string? userId, string clientName, string method, DirectInvocationData clientData)
+    {
+      var (id, _, email, _, _) = GetClientInfoFromContext();
+
+      if (userId != null && userId != id)
+      {
+        var isAllowed = await webSocketClientsService.ExistsWebSocketClientShares(userId, clientName, email);
+        if (!isAllowed) throw new HubException("Not allowed to invoke this method");
+      }
+
+      var retryCount = 1;
+      var wasSuccessfulInvocation = false;
+      using var communicationFailedCts = new CancellationTokenSource();
+
+      do
+      {
+        if (retryCount > 1)
+        {
+          logger.LogWarning("Retrying invocation for {WebSocketClientName}, method: {Method}. Attempt {RetryCount} of {MaxRetryAttempts}", clientName, method, retryCount, ServerCapabilities.MaxRetryAttempts);
+        }
+
+        communicationFailedCts.TryReset();
+        var clientConnection = await GetClientConnection(userId ?? id, clientName, communicationFailedCts.Token);
+
+        if (string.IsNullOrWhiteSpace(clientConnection?.ConnectionId)) throw new HubException("Client connection not found");
+
+        var hubClient = Clients.Client(clientConnection.ConnectionId);
+        if (hubClient == null)
+        {
+          webSocketClientConnectionsService.DeleteWebSocketClientConnection(userId ?? id, clientName, clientConnection.ConnectionId);
+          // TO DO: also delete from other servers in cluster
+          throw new HubException("Client connection not found");
+        }
+
+        if (ServerCapabilities.VerboseLogging)
+        {
+          logger.LogInformation("Invoking {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
+        }
+
+        var invoker = new DirectClientInvoker(logger);
+
+        try
+        {
+          await invoker.Send(clientData.Data.AsAsyncEnumerable(), ProcessMetadata(clientData, Context), method, clientConnection, hubClient, communicationFailedCts.Token);
+          await invoker.Cleanup();
+
+          if (ServerCapabilities.VerboseLogging)
+          {
+            logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
+          }
+        }
+        catch (Exception ex)
+        {
+          logger.LogError("Invocation error for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}. Error: {ErrorMessage}", clientName, method, clientConnection.ConnectionId, ex.Message);
+
+          await communicationFailedCts.CancelAsync();
+          await invoker.Cleanup();
+        }
+      } while (!wasSuccessfulInvocation && ServerCapabilities.FaultToleranceEnabled && retryCount++ < ServerCapabilities.MaxRetryAttempts);
+
+      throw new HubException("Invocation failed after multiple attempts");
+    }
+
     public string Ping(string message)
     {
       if (message != "Ping") throw new HubException("Invalid ping message");
