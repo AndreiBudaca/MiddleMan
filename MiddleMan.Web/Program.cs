@@ -37,7 +37,7 @@ namespace MiddleMan.Web
         .AddJsonOptions(options =>
         {
           options.JsonSerializerOptions.Converters.Add(new DateTimeConverter());
-        }); ;
+        });
 
       builder.Services.AddServices();
       

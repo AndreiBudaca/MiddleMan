@@ -2,13 +2,6 @@
 
 namespace MiddleMan.Core.Extensions
 {
-  public class AsyncEnumResult<T>
-  {
-    public required T[] Received { get; set; }
-
-    public required IAsyncEnumerable<T[]> Next { get; set; }
-  }
-
   public static class AsyncEnumerableExtensions
   {
     public static async Task<AsyncEnumResult<T>> EnumerateUntil<T>(this IAsyncEnumerable<T[]> data, int bytesToReceive, int offset, CancellationToken cancellationToken)
@@ -106,6 +99,52 @@ namespace MiddleMan.Core.Extensions
       }
 
       return memoryStream.ToArray();
+    }
+  
+    public static IAsyncEnumerable<T> AsAsyncEnumerable<T>(this T data)
+    {
+      return new AsyncEnumerableWrapper<T>(data);
+    }
+  }
+
+  public class AsyncEnumResult<T>
+  {
+    public required T[] Received { get; set; }
+
+    public required IAsyncEnumerable<T[]> Next { get; set; }
+  }
+
+  public class AsyncEnumerableWrapper<T>(T data) : IAsyncEnumerable<T>
+  {
+    private readonly T _data = data;
+
+    public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+    {
+      return new AsyncEnumerableWrapperEnumerator<T>(_data);
+    }
+  }
+
+  public class AsyncEnumerableWrapperEnumerator<T>(T data) : IAsyncEnumerator<T>
+  {
+    private readonly T _data = data;
+    private bool _hasMoved = false;
+
+    public T Current => _data;
+
+    public ValueTask<bool> MoveNextAsync()
+    {
+      if (!_hasMoved)
+      {
+        _hasMoved = true;
+        return ValueTask.FromResult(true);
+      }
+
+      return ValueTask.FromResult(false);
+    }
+
+    public ValueTask DisposeAsync()
+    {
+      return ValueTask.CompletedTask;
     }
   }
 }
