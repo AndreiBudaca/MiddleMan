@@ -9,6 +9,7 @@ using MiddleMan.Core;
 using MiddleMan.Communication;
 using MiddleMan.Communication.Channels;
 using MiddleMan.Service.Blobs.OracleObjectStorage;
+using MiddleMan.Web.Communication.Resolver;
 
 namespace MiddleMan.Web.Infrastructure.Configuration
 {
@@ -41,6 +42,9 @@ namespace MiddleMan.Web.Infrastructure.Configuration
       services.AddScoped<IWebSocketClientsService, WebSocketClientsService>();
       services.AddScoped<IWebSocketClientMethodService, WebSocketClientMethodService>();
       services.AddScoped<IWebSocketClientConnectionsService, WebSocketClientConnectionsService>();
+
+      // Communication DI
+      services.AddScoped<ICommunicationTargetResolver, CommunicationTargetResolver>();
 
       // Add cummunication channels
       if (ServerCapabilities.ClusterMode)

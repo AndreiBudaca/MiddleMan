@@ -5,12 +5,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace MiddleMan.Web.Controllers.Authentication
 {
-  [AllowAnonymous]
   [Route("api/account")]
   public class AccountController : Controller
   {
     [HttpGet]
-    [Route("login")]
+    [AllowAnonymous]
+    [Route("login")]  
     public IActionResult Login()
     {
       if (User.Identity?.IsAuthenticated ?? false) return Redirect("/");

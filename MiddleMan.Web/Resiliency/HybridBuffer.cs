@@ -1,19 +1,20 @@
 using System.Runtime.CompilerServices;
+using MiddleMan.Core;
 
 namespace MiddleMan.Web.Resiliency
 {
-  public class HybridBuffer : IContentBuffer
+  public class HybridBuffer : IContentBuffer<DataChunk>
   {
     private readonly int maxMemoryCapacity;
-    private readonly MemoryBuffer memoryBuffer;
+    private readonly MemoryBuffer<DataChunk> memoryBuffer;
     private readonly DiskBuffer diskBuffer;
 
-    public HybridBuffer(IAsyncEnumerable<byte[]> contentStream, int maxMemoryCapacity)
+    public HybridBuffer(IAsyncEnumerable<DataChunk> contentStream, int maxMemoryCapacity)
     {
       var enumerator = contentStream.GetAsyncEnumerator();
 
       this.maxMemoryCapacity = maxMemoryCapacity;
-      memoryBuffer = new MemoryBuffer(enumerator, maxMemoryCapacity);
+      memoryBuffer = new MemoryBuffer<DataChunk>(enumerator, maxMemoryCapacity);
       diskBuffer = new DiskBuffer(enumerator);
     }
 
@@ -25,7 +26,7 @@ namespace MiddleMan.Web.Resiliency
       GC.SuppressFinalize(this);
     }
 
-    public async IAsyncEnumerable<byte[]> Read([EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<DataChunk> Read([EnumeratorCancellation] CancellationToken cancellationToken)
     {
       var currentIndex = 0;
       await using var memoryEnumerator = memoryBuffer.Read(cancellationToken).GetAsyncEnumerator(cancellationToken);

@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using MiddleMan.Core.Extensions.Classes.AsyncEnumerable;
 
 namespace MiddleMan.Core.Extensions
 {
@@ -86,65 +87,25 @@ namespace MiddleMan.Core.Extensions
       return enumerable.GetAsyncEnumerator(cancellationToken).PrependItems(item, cancellationToken);
     }
 
-    public static async Task<byte[]> ReadAllBytes(this IAsyncEnumerable<byte[]> data, CancellationToken cancellationToken)
+    public static async Task<byte[]> ReadAllBytes(this IAsyncEnumerable<DataChunk> data, int? maxLength = null, CancellationToken cancellationToken = default)
     {
       using var memoryStream = new MemoryStream();
 
+      var totalBytesRead = 0;
       await foreach (var chunk in data.WithCancellation(cancellationToken))
       {
-        if (chunk != null)
-        {
-          await memoryStream.WriteAsync(chunk, cancellationToken);
-        }
+        totalBytesRead += chunk.Length;
+        if (maxLength.HasValue && totalBytesRead >= maxLength.Value) break;
+
+        await memoryStream.WriteAsync(chunk.Data.AsMemory(0, chunk.Length), cancellationToken);
       }
 
       return memoryStream.ToArray();
     }
-  
+
     public static IAsyncEnumerable<T> AsAsyncEnumerable<T>(this T data)
     {
       return new AsyncEnumerableWrapper<T>(data);
-    }
-  }
-
-  public class AsyncEnumResult<T>
-  {
-    public required T[] Received { get; set; }
-
-    public required IAsyncEnumerable<T[]> Next { get; set; }
-  }
-
-  public class AsyncEnumerableWrapper<T>(T data) : IAsyncEnumerable<T>
-  {
-    private readonly T _data = data;
-
-    public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default)
-    {
-      return new AsyncEnumerableWrapperEnumerator<T>(_data);
-    }
-  }
-
-  public class AsyncEnumerableWrapperEnumerator<T>(T data) : IAsyncEnumerator<T>
-  {
-    private readonly T _data = data;
-    private bool _hasMoved = false;
-
-    public T Current => _data;
-
-    public ValueTask<bool> MoveNextAsync()
-    {
-      if (!_hasMoved)
-      {
-        _hasMoved = true;
-        return ValueTask.FromResult(true);
-      }
-
-      return ValueTask.FromResult(false);
-    }
-
-    public ValueTask DisposeAsync()
-    {
-      return ValueTask.CompletedTask;
     }
   }
 }

@@ -1,0 +1,102 @@
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
+using Microsoft.AspNetCore.SignalR;
+using MiddleMan.Core;
+using MiddleMan.Core.Extensions;
+using MiddleMan.Web.Communication.CommunicationSync.SameServer;
+using MiddleMan.Web.Communication.Metadata;
+
+namespace MiddleMan.Web.Communication.Target
+{
+  public class SameServerWebSocketStreamingInvocationTarget(
+    ISingleClientProxy clientProxy,
+    string method
+  ) : ICommunicationTarget
+  {
+    private readonly ISingleClientProxy clientProxy = clientProxy;
+    private readonly string method = method;
+
+    public async Task<ResponseData?> WriteData(RequestData? data, CancellationToken cancellationToken = default)
+    {
+      var correlation = Guid.NewGuid();
+      var communicationControl = CommunicationSessionRegistry.RegisterSession(correlation);
+
+      // Send the correlation ID and metadata to the client to initiate the streaming session
+      await clientProxy.SendAsync(method, data?.Metadata, correlation, cancellationToken);
+
+      try
+      {
+        // Wait for the client to subscribe to the server channel
+        using (var timeoutDisposable = communicationControl.ChannelWriterSource.SetTimeout(cancellationToken: cancellationToken))
+        {
+          var channelWriter = await communicationControl.ChannelWriterSource.Task
+            ?? throw new InvalidOperationException("ChannelWriter is null.");
+
+          await WriteDataToChannel(channelWriter, communicationControl.ReaderCompletionSource, data, cancellationToken);
+        }
+
+        // Wait for the client to register its channel
+        ChannelReader<DataChunk>? channelReader;
+        using (var timeoutDisposable = communicationControl.ChannelReaderSource.SetTimeout(cancellationToken: cancellationToken))
+        {
+          channelReader = await communicationControl.ChannelReaderSource.Task
+            ?? throw new InvalidOperationException("ChannelReader is null.");
+        }
+
+        // Wait for the client to send the response metadata
+        HttpResponseMetadata? responseMetadata;
+        using (var timeoutDisposable = communicationControl.ResponseMetadataSource.SetTimeout(cancellationToken: cancellationToken))
+        {
+          responseMetadata = await communicationControl.ResponseMetadataSource.Task;
+        }
+
+        return new ResponseData
+        {
+          Metadata = responseMetadata,
+          Data = ReadDataFromChannel(channelReader, communicationControl.ReaderCompletionSource, cancellationToken)
+        };
+      }
+      finally
+      {
+        CommunicationSessionRegistry.RemoveSession(correlation);
+      }
+    }
+
+    private async static Task WriteDataToChannel(ChannelWriter<DataChunk> channelWriter, TaskCompletionSource readerCompletionSource, RequestData? data, CancellationToken cancellationToken)
+    {
+      if (data?.Data == null)
+      {
+        channelWriter.Complete();
+        return;
+      }
+
+      try
+      {
+        await foreach (var chunk in data.Data.WithCancellation(cancellationToken))
+        {
+          await channelWriter.WriteAsync(chunk, cancellationToken);
+        }
+      }
+      finally
+      {
+        channelWriter.Complete();
+        _ = readerCompletionSource.TrySetResult();
+      }
+    }
+
+    private static async IAsyncEnumerable<DataChunk> ReadDataFromChannel(ChannelReader<DataChunk> channelReader, TaskCompletionSource readerCompletionSource, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+      try
+      {
+        await foreach (var chunk in channelReader.ReadAllAsync(cancellationToken))
+        {
+          yield return chunk;
+        }
+      }
+      finally
+      {
+        _ = readerCompletionSource.TrySetResult();
+      }
+    }
+  }
+}

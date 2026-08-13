@@ -3,16 +3,16 @@ using MiddleMan.Core;
 
 namespace MiddleMan.Web.Resiliency
 {
-  public class DiskBuffer(IAsyncEnumerator<byte[]> enumerator) : IContentBuffer
+  public class DiskBuffer(IAsyncEnumerator<DataChunk> enumerator) : IContentBuffer<DataChunk>
   {
     private readonly List<int> chunkSizes = [];
     private readonly FileStream fileStream = new(Path.GetTempFileName(), FileMode.Create, FileAccess.ReadWrite, FileShare.Read, ServerCapabilities.MaxChunkSize, FileOptions.Asynchronous | FileOptions.DeleteOnClose);
-    private readonly IAsyncEnumerator<byte[]> enumerator = enumerator;
+    private readonly IAsyncEnumerator<DataChunk> enumerator = enumerator;
     private bool endOfStreamReached = false;
 
-    public DiskBuffer(IAsyncEnumerable<byte[]> contentStream) : this(contentStream.GetAsyncEnumerator()) { }
+    public DiskBuffer(IAsyncEnumerable<DataChunk> contentStream) : this(contentStream.GetAsyncEnumerator()) { }
 
-    public async IAsyncEnumerable<byte[]> Read([EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<DataChunk> Read([EnumeratorCancellation] CancellationToken cancellationToken)
     {
       var currentIndex = 0;
       fileStream.Seek(0, SeekOrigin.Begin);
@@ -24,11 +24,12 @@ namespace MiddleMan.Web.Resiliency
         if (currentIndex < chunkSizes.Count)
         {
           var chunkSize = chunkSizes[currentIndex];
-          var buffer = new byte[chunkSize];
+          var buffer = new byte[chunkSize]; // TODO: Consider using ArrayPool<byte> for better performance and reduced GC pressure.
           var bytesRead = await fileStream.ReadAsync(buffer.AsMemory(0, chunkSize), cancellationToken);
           if (bytesRead != chunkSize) throw new IOException("Failed to read the expected number of bytes from the buffer.");
           ++currentIndex;
-          yield return buffer;
+
+          yield return new DataChunk(buffer, chunkSize);
         }
         else
         {
@@ -40,7 +41,7 @@ namespace MiddleMan.Web.Resiliency
           }
 
           var chunk = enumerator.Current;
-          await fileStream.WriteAsync(chunk, cancellationToken);
+          await fileStream.WriteAsync(chunk.Data.AsMemory(0, chunk.Length), cancellationToken);
           chunkSizes.Add(chunk.Length);
           ++currentIndex;
           yield return chunk;

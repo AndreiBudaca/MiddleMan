@@ -2,14 +2,14 @@ using System.Runtime.CompilerServices;
 
 namespace MiddleMan.Web.Resiliency
 {
-  public class MemoryBuffer(IAsyncEnumerator<byte[]> contentStream, int maxCapacity) : IContentBuffer
+  public class MemoryBuffer<T>(IAsyncEnumerator<T> contentStream, int maxCapacity) : IContentBuffer<T>
   {
-    private readonly List<byte[]> chunks = new(maxCapacity);
-    private readonly IAsyncEnumerator<byte[]> enumerator = contentStream;
+    private readonly List<T> chunks = new(maxCapacity);
+    private readonly IAsyncEnumerator<T> enumerator = contentStream;
     private int bufferedChunksCount = 0;
     private bool endOfStreamReached = false;
 
-    public MemoryBuffer(IAsyncEnumerable<byte[]> contentStream, int maxCapacity) : 
+    public MemoryBuffer(IAsyncEnumerable<T> contentStream, int maxCapacity) : 
       this(contentStream.GetAsyncEnumerator(), maxCapacity) { }
 
     public async ValueTask DisposeAsync()
@@ -18,10 +18,10 @@ namespace MiddleMan.Web.Resiliency
       GC.SuppressFinalize(this);
     }
 
-    public async IAsyncEnumerable<byte[]> Read([EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<T> Read([EnumeratorCancellation] CancellationToken cancellationToken)
     {
       int currentIndex = 0;
-      byte[]? chunk;
+      T? chunk;
 
       do
       {

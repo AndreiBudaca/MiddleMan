@@ -177,7 +177,7 @@ namespace MiddleMan.Communication.Channels
     {
       try
       {
-        return System.Text.Json.JsonSerializer.Deserialize<T>(message!);
+        return System.Text.Json.JsonSerializer.Deserialize<T>((string)message!);
       }
       catch
       {

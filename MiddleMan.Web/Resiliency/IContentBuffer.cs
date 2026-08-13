@@ -1,7 +1,7 @@
 namespace MiddleMan.Web.Resiliency
 {
-  public interface IContentBuffer : IAsyncDisposable
+  public interface IContentBuffer<T> : IAsyncDisposable
   {
-    public IAsyncEnumerable<byte[]> Read(CancellationToken cancellationToken);
+    public IAsyncEnumerable<T> Read(CancellationToken cancellationToken);
   }
 }

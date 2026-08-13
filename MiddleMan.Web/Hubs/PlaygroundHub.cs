@@ -10,12 +10,14 @@ using MiddleMan.Service.WebSocketClientMethods;
 using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Web.Communication.ClientContracts;
 using MiddleMan.Web.Communication.ClientInvocator;
+using MiddleMan.Web.Communication.CommunicationSync.SameServer;
 using MiddleMan.Web.Communication.Metadata;
 using MiddleMan.Web.Communication.Metadata.Constants;
 using MiddleMan.Web.Hubs.Models;
 using MiddleMan.Web.Infrastructure.Identity;
 using MiddleMan.Web.Resiliency;
 using Polly;
+using System.Collections;
 using System.Threading.Channels;
 
 namespace MiddleMan.Web.Hubs
@@ -141,174 +143,170 @@ namespace MiddleMan.Web.Hubs
     #endregion
 
     #region [Communication methods]
-    public async Task AddReadChannel(Guid correlation, ChannelReader<byte[]> channelReader)
+    public async Task AddReadChannel(Guid correlation, HttpResponseMetadata? metadata, ChannelReader<byte[]> channelReader)
     {
       var (id, name, _, _, clientId) = GetClientInfoFromContext();
       await ConnectionChecks(id, name, clientId);
 
-      var sameServerInvocation = intraServerCommunicationManager.ExistsRequestSession(correlation);
-      await communicationManager.RegisterSessionReaderChannelAsync(channelReader, correlation, sameServerInvocation);
+      var session = CommunicationSessionRegistry.GetSession(correlation) 
+        ?? throw new HubException("Communication session not found");
+      
+      session.ResponseMetadataSource.TrySetResult(metadata);
+      session.ChannelReaderSource.TrySetResult(channelReader.AsDataChunkChannelReader());
 
-      if (!sameServerInvocation)
-      {
-        try
-        {
-          await intraServerCommunicationManager.RegisterResponseSession(correlation);
-
-          await communicationManager.WriteAsync(intraServerCommunicationManager.ReadRequestAsync(correlation), correlation);
-          await intraServerCommunicationManager.WriteResponseAsync(communicationManager.ReadAsync(correlation), correlation);
-        }
-        finally
-        {
-          await intraServerCommunicationManager.ClearResponseSession(correlation);
-        }
-      }
+      await session.ReaderCompletion;
     }
 
-    public async Task<ChannelReader<byte[]>> SubscribeToServer(Guid correlation)
+    public async IAsyncEnumerable<Memory<byte>> SubscribeToServer(Guid correlation)
     {
       var (id, name, _, _, clientId) = GetClientInfoFromContext();
       await ConnectionChecks(id, name, clientId);
 
-      var channel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(1));
-      await communicationManager.RegisterSessionWriterChannelAsync(channel.Writer, correlation);
+      var session = CommunicationSessionRegistry.GetSession(correlation) 
+        ?? throw new HubException("Communication session not found");
 
-      return channel.Reader;
+      var channel = Channel.CreateBounded<DataChunk>(new BoundedChannelOptions(1));
+      session.ChannelWriterSource.TrySetResult(channel.Writer);
+
+      await foreach (var chunk in channel.Reader.ReadAllAsync())
+      {
+        yield return chunk.Data.AsMemory(0, chunk.Length);
+      }
     }
 
-    public async Task<DirectInvocationResponse> Invoke(string? userId, string clientName, string method, DirectInvocationData clientData)
-    {
-      var (id, _, email, _, _) = GetClientInfoFromContext();
+    // public async Task<DirectInvocationResponse> Invoke(string? userId, string clientName, string method, DirectInvocationData clientData)
+    // {
+    //   var (id, _, email, _, _) = GetClientInfoFromContext();
 
-      if (userId != null && userId != id)
-      {
-        var isAllowed = await webSocketClientsService.ExistsWebSocketClientShares(userId, clientName, email);
-        if (!isAllowed) throw new HubException("Not allowed to invoke this method");
-      }
+    //   if (userId != null && userId != id)
+    //   {
+    //     var isAllowed = await webSocketClientsService.ExistsWebSocketClientShares(userId, clientName, email);
+    //     if (!isAllowed) throw new HubException("Not allowed to invoke this method");
+    //   }
 
-      var retryCount = 1;
-      var wasSuccessfulInvocation = false;
-      using var communicationFailedCts = new CancellationTokenSource();
+    //   var retryCount = 1;
+    //   var wasSuccessfulInvocation = false;
+    //   using var communicationFailedCts = new CancellationTokenSource();
 
-      do
-      {
-        if (retryCount > 1)
-        {
-          logger.LogWarning("Retrying invocation for {WebSocketClientName}, method: {Method}. Attempt {RetryCount} of {MaxRetryAttempts}", clientName, method, retryCount, ServerCapabilities.MaxRetryAttempts);
-        }
+    //   do
+    //   {
+    //     if (retryCount > 1)
+    //     {
+    //       logger.LogWarning("Retrying invocation for {WebSocketClientName}, method: {Method}. Attempt {RetryCount} of {MaxRetryAttempts}", clientName, method, retryCount, ServerCapabilities.MaxRetryAttempts);
+    //     }
 
-        communicationFailedCts.TryReset();
-        var clientConnection = await GetClientConnection(userId ?? id, clientName, communicationFailedCts.Token);
+    //     communicationFailedCts.TryReset();
+    //     var clientConnection = await GetClientConnection(userId ?? id, clientName, communicationFailedCts.Token);
 
-        if (string.IsNullOrWhiteSpace(clientConnection?.ConnectionId)) throw new HubException("Client connection not found");
+    //     if (string.IsNullOrWhiteSpace(clientConnection?.ConnectionId)) throw new HubException("Client connection not found");
 
-        var hubClient = Clients.Client(clientConnection.ConnectionId);
-        if (hubClient == null)
-        {
-          webSocketClientConnectionsService.DeleteWebSocketClientConnection(userId ?? id, clientName, clientConnection.ConnectionId);
-          // TO DO: also delete from other servers in cluster
-          throw new HubException("Client connection not found");
-        }
+    //     var hubClient = Clients.Client(clientConnection.ConnectionId);
+    //     if (hubClient == null)
+    //     {
+    //       webSocketClientConnectionsService.DeleteWebSocketClientConnection(userId ?? id, clientName, clientConnection.ConnectionId);
+    //       // TO DO: also delete from other servers in cluster
+    //       throw new HubException("Client connection not found");
+    //     }
 
-        if (ServerCapabilities.VerboseLogging)
-        {
-          logger.LogInformation("Invoking {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
-        }
+    //     if (ServerCapabilities.VerboseLogging)
+    //     {
+    //       logger.LogInformation("Invoking {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
+    //     }
 
-        var invoker = new DirectClientInvoker(logger);
+    //     var invoker = new DirectClientInvoker(logger);
 
-        try
-        {
-          var (responseMetadata, responseData) = await invoker.Invoke(clientData.Data.AsAsyncEnumerable(), ProcessMetadata(clientData, Context), method, clientConnection, hubClient, communicationFailedCts.Token);
-          await invoker.Cleanup();
+    //     try
+    //     {
+    //       var (responseMetadata, responseData) = await invoker.Invoke(clientData.Data.AsAsyncEnumerable(), ProcessMetadata(clientData, Context), method, clientConnection, hubClient, communicationFailedCts.Token);
+    //       await invoker.Cleanup();
 
-          if (ServerCapabilities.VerboseLogging)
-          {
-            logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
-          }
+    //       if (ServerCapabilities.VerboseLogging)
+    //       {
+    //         logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
+    //       }
 
-          return new DirectInvocationResponse
-          {
-            Metadata = clientConnection.ClientCapabilities.SendHTTPMetadata ? responseMetadata : null,
-            Data = responseData != null ? await responseData.ReadAllBytes(communicationFailedCts.Token) : []
-          };
-        }
-        catch (Exception ex)
-        {
-          logger.LogError("Invocation error for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}. Error: {ErrorMessage}", clientName, method, clientConnection.ConnectionId, ex.Message);
+    //       return new DirectInvocationResponse
+    //       {
+    //         Metadata = clientConnection.ClientCapabilities.SendHTTPMetadata ? responseMetadata : null,
+    //         Data = responseData != null ? await responseData.ReadAllBytes(communicationFailedCts.Token) : []
+    //       };
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //       logger.LogError("Invocation error for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}. Error: {ErrorMessage}", clientName, method, clientConnection.ConnectionId, ex.Message);
 
-          await communicationFailedCts.CancelAsync();
-          await invoker.Cleanup();
-        }
-      } while (!wasSuccessfulInvocation && ServerCapabilities.FaultToleranceEnabled && retryCount++ < ServerCapabilities.MaxRetryAttempts);
+    //       await communicationFailedCts.CancelAsync();
+    //       await invoker.Cleanup();
+    //     }
+    //   } while (!wasSuccessfulInvocation && ServerCapabilities.FaultToleranceEnabled && retryCount++ < ServerCapabilities.MaxRetryAttempts);
 
-      throw new HubException("Invocation failed after multiple attempts");
-    }
+    //   throw new HubException("Invocation failed after multiple attempts");
+    // }
 
-    public async Task Send(string? userId, string clientName, string method, DirectInvocationData clientData)
-    {
-      var (id, _, email, _, _) = GetClientInfoFromContext();
+    // public async Task Send(string? userId, string clientName, string method, DirectInvocationData clientData)
+    // {
+    //   var (id, _, email, _, _) = GetClientInfoFromContext();
 
-      if (userId != null && userId != id)
-      {
-        var isAllowed = await webSocketClientsService.ExistsWebSocketClientShares(userId, clientName, email);
-        if (!isAllowed) throw new HubException("Not allowed to invoke this method");
-      }
+    //   if (userId != null && userId != id)
+    //   {
+    //     var isAllowed = await webSocketClientsService.ExistsWebSocketClientShares(userId, clientName, email);
+    //     if (!isAllowed) throw new HubException("Not allowed to invoke this method");
+    //   }
 
-      var retryCount = 1;
-      var wasSuccessfulInvocation = false;
-      using var communicationFailedCts = new CancellationTokenSource();
+    //   var retryCount = 1;
+    //   var wasSuccessfulInvocation = false;
+    //   using var communicationFailedCts = new CancellationTokenSource();
 
-      do
-      {
-        if (retryCount > 1)
-        {
-          logger.LogWarning("Retrying invocation for {WebSocketClientName}, method: {Method}. Attempt {RetryCount} of {MaxRetryAttempts}", clientName, method, retryCount, ServerCapabilities.MaxRetryAttempts);
-        }
+    //   do
+    //   {
+    //     if (retryCount > 1)
+    //     {
+    //       logger.LogWarning("Retrying invocation for {WebSocketClientName}, method: {Method}. Attempt {RetryCount} of {MaxRetryAttempts}", clientName, method, retryCount, ServerCapabilities.MaxRetryAttempts);
+    //     }
 
-        communicationFailedCts.TryReset();
-        var clientConnection = await GetClientConnection(userId ?? id, clientName, communicationFailedCts.Token);
+    //     communicationFailedCts.TryReset();
+    //     var clientConnection = await GetClientConnection(userId ?? id, clientName, communicationFailedCts.Token);
 
-        if (string.IsNullOrWhiteSpace(clientConnection?.ConnectionId)) throw new HubException("Client connection not found");
+    //     if (string.IsNullOrWhiteSpace(clientConnection?.ConnectionId)) throw new HubException("Client connection not found");
 
-        var hubClient = Clients.Client(clientConnection.ConnectionId);
-        if (hubClient == null)
-        {
-          webSocketClientConnectionsService.DeleteWebSocketClientConnection(userId ?? id, clientName, clientConnection.ConnectionId);
-          // TO DO: also delete from other servers in cluster
-          throw new HubException("Client connection not found");
-        }
+    //     var hubClient = Clients.Client(clientConnection.ConnectionId);
+    //     if (hubClient == null)
+    //     {
+    //       webSocketClientConnectionsService.DeleteWebSocketClientConnection(userId ?? id, clientName, clientConnection.ConnectionId);
+    //       // TO DO: also delete from other servers in cluster
+    //       throw new HubException("Client connection not found");
+    //     }
 
-        if (ServerCapabilities.VerboseLogging)
-        {
-          logger.LogInformation("Invoking {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
-        }
+    //     if (ServerCapabilities.VerboseLogging)
+    //     {
+    //       logger.LogInformation("Invoking {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
+    //     }
 
-        var invoker = new DirectClientInvoker(logger);
+    //     var invoker = new DirectClientInvoker(logger);
 
-        try
-        {
-          await invoker.Send(clientData.Data.AsAsyncEnumerable(), ProcessMetadata(clientData, Context), method, clientConnection, hubClient, communicationFailedCts.Token);
-          await invoker.Cleanup();
+    //     try
+    //     {
+    //       await invoker.Send(clientData.Data.AsAsyncEnumerable(), ProcessMetadata(clientData, Context), method, clientConnection, hubClient, communicationFailedCts.Token);
+    //       await invoker.Cleanup();
 
-          if (ServerCapabilities.VerboseLogging)
-          {
-            logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
-          }
+    //       if (ServerCapabilities.VerboseLogging)
+    //       {
+    //         logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
+    //       }
           
-          return;
-        }
-        catch (Exception ex)
-        {
-          logger.LogError("Invocation error for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}. Error: {ErrorMessage}", clientName, method, clientConnection.ConnectionId, ex.Message);
+    //       return;
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //       logger.LogError("Invocation error for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}. Error: {ErrorMessage}", clientName, method, clientConnection.ConnectionId, ex.Message);
 
-          await communicationFailedCts.CancelAsync();
-          await invoker.Cleanup();
-        }
-      } while (!wasSuccessfulInvocation && ServerCapabilities.FaultToleranceEnabled && retryCount++ < ServerCapabilities.MaxRetryAttempts);
+    //       await communicationFailedCts.CancelAsync();
+    //       await invoker.Cleanup();
+    //     }
+    //   } while (!wasSuccessfulInvocation && ServerCapabilities.FaultToleranceEnabled && retryCount++ < ServerCapabilities.MaxRetryAttempts);
 
-      throw new HubException("Invocation failed after multiple attempts");
-    }
+    //   throw new HubException("Invocation failed after multiple attempts");
+    // }
 
     public string Ping(string message)
     {

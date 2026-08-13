@@ -10,6 +10,12 @@ namespace MiddleMan.Core
       Data = new byte[ServerCapabilities.MaxChunkSize];
     }
 
+    public DataChunk(byte[] data)
+    {
+      Data = data;
+      Length = data.Length;
+    }
+
     public DataChunk(byte[] data, int length)
     {
       Data = data;

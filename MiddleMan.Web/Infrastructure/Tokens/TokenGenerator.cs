@@ -11,7 +11,7 @@ namespace MiddleMan.Web.Infrastructure.Tokens
   {
     public static string Generate(TokenData data)
     {
-      ArgumentNullException.ThrowIfNull(nameof(data));
+      ArgumentNullException.ThrowIfNull(data, nameof(data));
       ArgumentException.ThrowIfNullOrWhiteSpace(data.Secret, nameof(data.Secret));
 
       var secretKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(data.Secret));
