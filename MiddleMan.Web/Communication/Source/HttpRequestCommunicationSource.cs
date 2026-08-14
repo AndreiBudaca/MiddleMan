@@ -18,11 +18,14 @@ namespace MiddleMan.Web.Communication.Source
 
     private static async IAsyncEnumerable<DataChunk> Adapt(HttpRequest request)
     {
-      var buffer = new byte[ServerCapabilities.MaxChunkSize];
-      var bytesRead = await request.Body.ReadAsync(buffer.AsMemory(0, ServerCapabilities.MaxChunkSize));
+      var bytesRead = int.MaxValue;
 
       while (bytesRead > 0)
       {
+        // TO DO: Consider using a buffer pool to reduce memory allocations for large requests
+        var buffer = new byte[ServerCapabilities.MaxChunkSize];
+        bytesRead = await request.Body.ReadAsync(buffer.AsMemory(0, ServerCapabilities.MaxChunkSize));
+
         if (bytesRead == buffer.Length)
         {
           yield return new DataChunk(buffer, bytesRead);
@@ -31,8 +34,6 @@ namespace MiddleMan.Web.Communication.Source
         {
           yield return new DataChunk(buffer.Take(bytesRead).ToArray(), bytesRead);
         }
-
-        bytesRead = await request.Body.ReadAsync(buffer.AsMemory(0, ServerCapabilities.MaxChunkSize));
       }
     }
   }
