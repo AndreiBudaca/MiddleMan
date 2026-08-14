@@ -22,7 +22,6 @@ namespace MiddleMan.Web.Communication.Mediator
       await using var bufferedRequestSource = new BufferedCommunicationSource(context.Source);
 
       var retryCount = 1;
-      var wasSuccessfulInvocation = false;
 
       using var communicationFailedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -49,7 +48,9 @@ namespace MiddleMan.Web.Communication.Mediator
           }
 
           await using var bufferedResponseSource = new BufferedResponseData(responseSource);
-          await context.Sink.WriteData(await bufferedResponseSource.Read(communicationFailedCts.Token), communicationFailedCts.Token);
+          var responseData = await bufferedResponseSource.Read(communicationFailedCts.Token);
+          await context.Sink.WriteData(responseData, communicationFailedCts.Token);
+
           return true;
         }
         catch (Exception ex)
@@ -57,17 +58,20 @@ namespace MiddleMan.Web.Communication.Mediator
           LogInvocationError(ex);
           communicationFailedCts.Cancel();
         }
-      } while (!wasSuccessfulInvocation && ServerCapabilities.FaultToleranceEnabled && retryCount++ < ServerCapabilities.MaxRetryAttempts);
+      } while (ServerCapabilities.FaultToleranceEnabled && retryCount++ < ServerCapabilities.MaxRetryAttempts);
 
-      return wasSuccessfulInvocation;
+      return false;
     }
 
     private void LogInvocation(int retryCount)
     {
       if (!ServerCapabilities.VerboseLogging) return;
 
+
       if (retryCount == 1)
       {
+        if (!logger.IsEnabled(LogLevel.Information)) return;
+
         logger.LogInformation("Invoking {WebSocketClientName}, method: {Method}",
           targetDescription.Name,
           targetDescription.Method);
@@ -75,6 +79,8 @@ namespace MiddleMan.Web.Communication.Mediator
         return;
       }
 
+      if (!logger.IsEnabled(LogLevel.Warning)) return;
+      
       logger.LogWarning("Retrying invocation for {WebSocketClientName}, method: {Method}. Attempt {RetryCount} of {MaxRetryAttempts}",
         targetDescription.Name,
         targetDescription.Method,
@@ -84,6 +90,8 @@ namespace MiddleMan.Web.Communication.Mediator
 
     private void LogInvocationError(Exception ex)
     {
+      if (!logger.IsEnabled(LogLevel.Error)) return;
+
       logger.LogError(ex, "Invocation error for {WebSocketClientName}, method: {Method}. Error: {ErrorMessage}",
         targetDescription.Name,
         targetDescription.Method,

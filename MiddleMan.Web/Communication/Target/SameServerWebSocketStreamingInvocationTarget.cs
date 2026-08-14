@@ -22,7 +22,7 @@ namespace MiddleMan.Web.Communication.Target
       var communicationControl = CommunicationSessionRegistry.RegisterSession(correlation);
 
       // Send the correlation ID and metadata to the client to initiate the streaming session
-      await clientProxy.SendAsync(method, data?.Metadata, correlation, cancellationToken);
+      await clientProxy.SendAsync(method, correlation, data?.Metadata, cancellationToken);
 
       try
       {
@@ -32,7 +32,7 @@ namespace MiddleMan.Web.Communication.Target
           var channelWriter = await communicationControl.ChannelWriterSource.Task
             ?? throw new InvalidOperationException("ChannelWriter is null.");
 
-          await WriteDataToChannel(channelWriter, communicationControl.ReaderCompletionSource, data, cancellationToken);
+          await WriteDataToChannel(channelWriter, communicationControl.WriterCompletionSource, data, cancellationToken);
         }
 
         // Wait for the client to register its channel
@@ -62,7 +62,7 @@ namespace MiddleMan.Web.Communication.Target
       }
     }
 
-    private async static Task WriteDataToChannel(ChannelWriter<DataChunk> channelWriter, TaskCompletionSource readerCompletionSource, RequestData? data, CancellationToken cancellationToken)
+    private async static Task WriteDataToChannel(ChannelWriter<DataChunk> channelWriter, TaskCompletionSource writerCompletionSource, RequestData? data, CancellationToken cancellationToken)
     {
       if (data?.Data == null)
       {
@@ -80,7 +80,7 @@ namespace MiddleMan.Web.Communication.Target
       finally
       {
         channelWriter.Complete();
-        _ = readerCompletionSource.TrySetResult();
+        _ = writerCompletionSource.TrySetResult();
       }
     }
 

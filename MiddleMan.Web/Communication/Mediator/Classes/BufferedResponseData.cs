@@ -27,6 +27,7 @@ namespace MiddleMan.Web.Communication.Mediator.Classes
       if (source == null || buffer == null) return source;
 
       await EnsureDataBuffered(cancellationToken);
+      
       return new ResponseData
       {
         Metadata = source.Metadata,
