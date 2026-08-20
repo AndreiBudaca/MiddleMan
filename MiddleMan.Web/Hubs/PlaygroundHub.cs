@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.IdentityModel.Protocols;
 using MiddleMan.Communication;
 using MiddleMan.Core;
 using MiddleMan.Core.Extensions;
@@ -9,15 +8,11 @@ using MiddleMan.Service.WebSocketClientConnections.Classes;
 using MiddleMan.Service.WebSocketClientMethods;
 using MiddleMan.Service.WebSocketClients;
 using MiddleMan.Web.Communication.ClientContracts;
-using MiddleMan.Web.Communication.ClientInvocator;
 using MiddleMan.Web.Communication.CommunicationSync.SameServer;
 using MiddleMan.Web.Communication.Metadata;
 using MiddleMan.Web.Communication.Metadata.Constants;
 using MiddleMan.Web.Hubs.Models;
 using MiddleMan.Web.Infrastructure.Identity;
-using MiddleMan.Web.Resiliency;
-using Polly;
-using System.Collections;
 using System.Threading.Channels;
 
 namespace MiddleMan.Web.Hubs
@@ -100,7 +95,7 @@ namespace MiddleMan.Web.Hubs
 
       await ConnectionChecks(id, name, clientId);
 
-      await webSocketClientMethodService.ReceiveMethodsAsync(id, name, channelReader.ReadAllAsync(), CancellationToken.None);
+      await webSocketClientMethodService.ReceiveMethodsAsync(id, name, channelReader.AsDataChunkChannelReader().ReadAllAsync(), CancellationToken.None);
     }
 
     public async Task MethodsRaw(byte[] methodsBytes)

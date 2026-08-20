@@ -14,7 +14,7 @@ namespace MiddleMan.Service.WebSocketClientMethods
     private readonly IClientRepository _clientRepository = clientRepository;
     private readonly IBlobService _blobService = blobService;
 
-    public async Task ReceiveMethodsAsync(string identifier, string name, IAsyncEnumerable<byte[]> methodChunks, CancellationToken cancellationToken)
+    public async Task ReceiveMethodsAsync(string identifier, string name, IAsyncEnumerable<DataChunk> methodChunks, CancellationToken cancellationToken)
     {
       var client = await _clientRepository.GetByIdAsync((identifier, name)) ?? throw new InvalidOperationException($"Client {identifier}:{name} not found.");
 
@@ -65,6 +65,9 @@ namespace MiddleMan.Service.WebSocketClientMethods
           },
         ]);
     }
+
+    private static MethodMetadataDto GetMetadata(DataChunk metadataChunk) =>
+      GetMetadata(metadataChunk.Data);
 
     private static MethodMetadataDto GetMetadata(byte[] metadataBytes)
     {

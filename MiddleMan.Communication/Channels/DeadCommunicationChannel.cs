@@ -1,20 +1,26 @@
 using System.Runtime.CompilerServices;
+using MiddleMan.Core;
 
 namespace MiddleMan.Communication.Channels
 {
   public class DeadCommunicationChannel : ICommunicationChannel
   {
-    public Task AddToStreamAsync(string streamKey, byte[] data)
+    public Task AddToStreamAsync(string streamKey, DataChunk data)
     {
       return Task.CompletedTask;
     }
 
-    public async IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<DataChunk> ConsumeStreamAsync(string streamKey, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
       yield break;
     }
 
-    public Task DeleteKeyAsync(string key)
+    public Task CreateStreamAsync(string streamKey)
+    {
+      return Task.CompletedTask;
+    }
+
+    public Task DeleteStreamAsync(string streamKey)
     {
       return Task.CompletedTask;
     }
@@ -29,22 +35,12 @@ namespace MiddleMan.Communication.Channels
       return Task.CompletedTask;
     }
 
-    public Task PublishAsync(string topic, byte[] message)
-    {
-      return Task.CompletedTask;
-    }
-
     public Task SignalStreamEndAsync(string streamKey)
     {
       return Task.CompletedTask;
     }
 
     public Task SubscribeAsync<T>(string topic, Func<T, Task> onMessageReceived)
-    {
-      return Task.CompletedTask;
-    }
-
-    public Task SubscribeAsync(string topic, Func<byte[], Task> onMessageReceived)
     {
       return Task.CompletedTask;
     }

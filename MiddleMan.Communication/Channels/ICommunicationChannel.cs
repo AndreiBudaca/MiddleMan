@@ -1,3 +1,5 @@
+using MiddleMan.Core;
+
 namespace MiddleMan.Communication.Channels
 {
   public interface ICommunicationChannel
@@ -5,27 +7,26 @@ namespace MiddleMan.Communication.Channels
     #region "PUB / SUB"
     public Task SubscribeAsync<T>(string topic, Func<T, Task> onMessageReceived);
 
-    public Task SubscribeAsync(string topic, Func<byte[], Task> onMessageReceived);
-
     public Task<Task<T?>> PeekChannelAsync<T>(string topic, CancellationToken cancellationToken = default);
 
     public Task UnsubscribeAsync(string topic);
 
     public Task PublishAsync<T>(string topic, T message);
     
-    public Task PublishAsync(string topic, byte[] message);
     #endregion
 
     #region "STREAMS"
-    public Task AddToStreamAsync(string streamKey, byte[] data);
+    public Task CreateStreamAsync(string streamKey);
+
+    public Task AddToStreamAsync(string streamKey, DataChunk data);
     
     public Task TerminateWithErrorAsync(string streamKey, string errorMessage);
 
     public Task SignalStreamEndAsync(string streamKey);
 
-    public IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, CancellationToken cancellationToken);
+    public IAsyncEnumerable<DataChunk> ConsumeStreamAsync(string streamKey, CancellationToken cancellationToken);
 
-    public Task DeleteKeyAsync(string key);
+    public Task DeleteStreamAsync(string streamKey);
     #endregion
   }
 }

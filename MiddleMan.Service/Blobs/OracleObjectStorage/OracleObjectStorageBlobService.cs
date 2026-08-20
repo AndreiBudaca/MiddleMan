@@ -39,7 +39,7 @@ namespace MiddleMan.Service.Blobs.OracleObjectStorage
       return $"https://objectstorage.{configurator.Region}.oraclecloud.com{publicUrl}";
     }
 
-    public async Task<string> UploadBlob(string[] blobParts, IAsyncEnumerable<byte[]> data, CancellationToken cancellationToken)
+    public async Task<string> UploadBlob(string[] blobParts, IAsyncEnumerable<DataChunk> data, CancellationToken cancellationToken)
     {
       var tempFilePath = Path.GetTempFileName();
 
@@ -48,7 +48,7 @@ namespace MiddleMan.Service.Blobs.OracleObjectStorage
         using var blobStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.ReadWrite, FileShare.None, ServerCapabilities.MaxChunkSize, useAsync: true);
         await foreach (var b in data.WithCancellation(cancellationToken))
         {
-          await blobStream.WriteAsync(b.AsMemory(0, b.Length), cancellationToken);
+          await blobStream.WriteAsync(b.Data.AsMemory(0, b.Length), cancellationToken);
         }
         blobStream.Position = 0;
 

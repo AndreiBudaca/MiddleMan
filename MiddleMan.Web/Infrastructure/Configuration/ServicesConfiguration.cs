@@ -62,7 +62,7 @@ namespace MiddleMan.Web.Infrastructure.Configuration
 
       // Add communication hubs
       services.AddScoped<StreamingCommunicationManager>();
-      services.AddScoped<IntraServerCommunicationManager>();
+      services.AddTransient<IntraServerCommunicationManager>();
       services.AddScoped<ClientInfoCommunicationManager>();
     }
   }

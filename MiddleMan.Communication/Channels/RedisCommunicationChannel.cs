@@ -29,15 +29,11 @@ namespace MiddleMan.Communication.Channels
       database = redis.GetDatabase();
     }
 
+    #region "PUB/SUB"
     public Task PublishAsync<T>(string topic, T message)
     {
       var serializedMessage = SerializeMessage(message);
       return subscriber.PublishAsync(RedisChannel.Literal(topic), serializedMessage);
-    }
-
-    public Task PublishAsync(string topic, byte[] message)
-    {
-      return subscriber.PublishAsync(RedisChannel.Literal(topic), message);
     }
 
     public Task SubscribeAsync<T>(string topic, Func<T, Task> onMessageReceived)
@@ -47,15 +43,6 @@ namespace MiddleMan.Communication.Channels
         T deserializedMessage = DeserializeMessage<T>(message) ??
          throw new Exception($"Failed to deserialize message for topic '{topic}'");
         await onMessageReceived(deserializedMessage);
-      });
-    }
-
-    public Task SubscribeAsync(string topic, Func<byte[], Task> onMessageReceived)
-    {
-      return subscriber.SubscribeAsync(RedisChannel.Literal(topic), async (channel, message) =>
-      {
-        var rawBytes = AsRawBytes(message);
-        await onMessageReceived(rawBytes);
       });
     }
 
@@ -89,32 +76,31 @@ namespace MiddleMan.Communication.Channels
     {
       return subscriber.UnsubscribeAsync(RedisChannel.Literal(topic));
     }
+    #endregion
 
     #region "STREAMS"
-    public Task AddToStreamAsync(string streamKey, byte[] data)
+    public Task CreateStreamAsync(string streamKey)
     {
-      return database.StreamAddAsync(streamKey, [
-        new NameValueEntry("type", "data"),
-        new NameValueEntry("data", data)
-      ]);
+      return database.ExecuteAsync(
+        "XADD", streamKey, "MAXLEN", "=", "0", "*", "init", "1");
+    }
+
+    public Task AddToStreamAsync(string streamKey, DataChunk data)
+    {
+      return AddIfStreamExists(streamKey, "type", "data", "data", data.Data.AsMemory(0, data.Length));
     }
 
     public Task TerminateWithErrorAsync(string streamKey, string errorMessage)
     {
-      return database.StreamAddAsync(streamKey, [
-        new NameValueEntry("type", "error"),
-        new NameValueEntry("data", errorMessage)
-      ]);
+      return AddIfStreamExists(streamKey, "type", "error", "data", errorMessage);
     }
 
     public Task SignalStreamEndAsync(string streamKey)
     {
-      return database.StreamAddAsync(streamKey, [
-        new NameValueEntry("type", "end")
-      ]);
+      return AddIfStreamExists(streamKey, "type", "end");
     }
 
-    public async IAsyncEnumerable<byte[]> ConsumeStreamAsync(string streamKey, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<DataChunk> ConsumeStreamAsync(string streamKey, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
       using var blockingConnection = await ConnectionMultiplexer.ConnectAsync(new ConfigurationOptions
       {
@@ -143,7 +129,7 @@ namespace MiddleMan.Communication.Channels
 
           foreach (var data in chunks)
           {
-            yield return data;
+            yield return new DataChunk(data, data.Length);
           }
 
           if (streamEnded)
@@ -162,9 +148,9 @@ namespace MiddleMan.Communication.Channels
       }
     }
 
-    public async Task DeleteKeyAsync(string key)
+    public async Task DeleteStreamAsync(string streamKey)
     {
-      await database.KeyDeleteAsync(key);
+      await database.KeyDeleteAsync(streamKey);
     }
     #endregion
 
@@ -183,12 +169,6 @@ namespace MiddleMan.Communication.Channels
       {
         return default;
       }
-    }
-
-    private static byte[] AsRawBytes(RedisValue redisValue)
-    {
-      if (redisValue.IsNull) return [];
-      return (byte[])redisValue!;
     }
 
     private static (List<RedisValue> toBeDeleted, IEnumerable<byte[]> chunks, bool streamEnded) HandleStreamResult(RedisResult[]? streamsArray)
@@ -230,6 +210,22 @@ namespace MiddleMan.Communication.Channels
       }
 
       return (toBeDeleted, chunks, streamEnded);
+    }
+
+    private async Task AddIfStreamExists(string streamKey, params RedisValue[] values)
+    {
+      var result = await database.ExecuteAsync(
+        "XADD",
+        streamKey,
+        "NOMKSTREAM",
+        "*",
+        values);
+
+      if (result.IsNull)
+      {
+        throw new KeyNotFoundException(
+            $"Redis stream '{streamKey}' does not exist.");
+      }
     }
   }
 }

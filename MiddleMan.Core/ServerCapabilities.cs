@@ -6,7 +6,7 @@
 
     public static readonly int IntraServerBufferedChunks = int.TryParse(Environment.GetEnvironmentVariable("MIDDLEMAN_INTRA_SERVER_BUFFERED_CHUNKS"), out int intraServerBufferedChunks) ? intraServerBufferedChunks : 10;
 
-    public static readonly int GlobalTimeoutSeconds = int.TryParse(Environment.GetEnvironmentVariable("MIDDLEMAN_GLOBAL_TIMEOUT_SECONDS"), out int globalTimeoutSeconds) ? globalTimeoutSeconds : 10;
+    public static readonly int GlobalTimeoutSeconds = int.TryParse(Environment.GetEnvironmentVariable("MIDDLEMAN_GLOBAL_TIMEOUT_SECONDS"), out int globalTimeoutSeconds) ? globalTimeoutSeconds : 1000000;
 
     public static readonly int ClientConnectionTimeoutSeconds = int.TryParse(Environment.GetEnvironmentVariable("MIDDLEMAN_CLIENT_CONNECTION_TIMEOUT_SECONDS"), out int clientConnectionTimeoutSeconds) ? clientConnectionTimeoutSeconds : 5;
 

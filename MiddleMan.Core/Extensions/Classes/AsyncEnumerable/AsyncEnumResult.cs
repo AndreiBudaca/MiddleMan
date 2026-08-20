@@ -1,9 +1,9 @@
 namespace MiddleMan.Core.Extensions.Classes.AsyncEnumerable
 {
-  public class AsyncEnumResult<T>
+  public class AsyncEnumResult
   {
-    public required T[] Received { get; set; }
+    public required DataChunk Received { get; set; }
 
-    public required IAsyncEnumerable<T[]> Next { get; set; }
+    public required IAsyncEnumerable<DataChunk> Next { get; set; }
   }
 }

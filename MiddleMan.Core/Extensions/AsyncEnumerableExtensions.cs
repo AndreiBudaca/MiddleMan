@@ -5,9 +5,9 @@ namespace MiddleMan.Core.Extensions
 {
   public static class AsyncEnumerableExtensions
   {
-    public static async Task<AsyncEnumResult<T>> EnumerateUntil<T>(this IAsyncEnumerable<T[]> data, int bytesToReceive, int offset, CancellationToken cancellationToken)
+    public static async Task<AsyncEnumResult> EnumerateUntil(this IAsyncEnumerable<DataChunk> data, int bytesToReceive, int offset, CancellationToken cancellationToken)
     {
-      var received = new T[bytesToReceive];
+      var received = new DataChunk(bytesToReceive);
       var totalBytesReceived = 0;
       var bytesCopied = 0;
 
@@ -34,7 +34,7 @@ namespace MiddleMan.Core.Extensions
           var copyFromIndex = totalBytesReceived > offset ? 0 : offset - totalBytesReceived;
           var bytesToCopy = Math.Min(item.Length - copyFromIndex, bytesToReceive - totalBytesReceived + offset);
 
-          Array.Copy(item, copyFromIndex, received, bytesCopied, bytesToCopy);
+          received.Append(item.Data, bytesToCopy);
 
           // Update counters
           bytesCopied += bytesToCopy;
@@ -43,12 +43,15 @@ namespace MiddleMan.Core.Extensions
           // Check if we've received enough bytes
           if (bytesCopied >= bytesToReceive)
           {
-            var remaining = item.Skip(copyFromIndex + bytesToCopy).ToArray();
+            var remainingIndex = copyFromIndex + bytesToCopy;
+            var remaining = new DataChunk(item.Length - remainingIndex);
+            Array.Copy(item.Data, remainingIndex, remaining.Data, 0, remaining.Length);
+
             enumeratorTransferred = true;
-            return new AsyncEnumResult<T>
+            return new AsyncEnumResult
             {
               Received = received,
-              Next = enumerator.PrependItems(remaining, CancellationToken.None)
+              Next = enumerator.PrependItems(remaining)
             };
           }
         }
@@ -64,7 +67,7 @@ namespace MiddleMan.Core.Extensions
       throw new InvalidDataException($"Invalid content lenght. Expected to read {bytesToReceive} from {offset}, but only got {totalBytesReceived}.");
     }
 
-    public static async IAsyncEnumerable<T[]> PrependItems<T>(this IAsyncEnumerator<T[]> enumerator, T[] item, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public static async IAsyncEnumerable<DataChunk> PrependItems(this IAsyncEnumerator<DataChunk> enumerator, DataChunk item)
     {
       try
       {
@@ -82,9 +85,9 @@ namespace MiddleMan.Core.Extensions
       }
     }
 
-    public static IAsyncEnumerable<T[]> PrependItems<T>(this IAsyncEnumerable<T[]> enumerable, T[] item, CancellationToken cancellationToken)
+    public static IAsyncEnumerable<DataChunk> PrependItems(this IAsyncEnumerable<DataChunk> enumerable, DataChunk item, CancellationToken cancellationToken)
     {
-      return enumerable.GetAsyncEnumerator(cancellationToken).PrependItems(item, cancellationToken);
+      return enumerable.GetAsyncEnumerator(cancellationToken).PrependItems(item);
     }
 
     public static async Task<byte[]> ReadAllBytes(this IAsyncEnumerable<DataChunk> data, int? maxLength = null, CancellationToken cancellationToken = default)

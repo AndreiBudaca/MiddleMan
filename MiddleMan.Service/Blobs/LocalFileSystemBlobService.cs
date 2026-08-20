@@ -4,7 +4,7 @@ namespace MiddleMan.Service.Blobs
 {
   public class LocalFileSystemBlobService() : IBlobService
   {
-    public async Task<string> UploadBlob(string[] blobParts, IAsyncEnumerable<byte[]> dataChunks, CancellationToken cancellationToken)
+    public async Task<string> UploadBlob(string[] blobParts, IAsyncEnumerable<DataChunk> dataChunks, CancellationToken cancellationToken)
     {
       var blobPath = string.Join(Path.DirectorySeparatorChar, blobParts);
       var filePath = Path.Combine(ServerCapabilities.StaticFilesPath, blobPath);
@@ -13,7 +13,7 @@ namespace MiddleMan.Service.Blobs
 
       await foreach (var b in dataChunks.WithCancellation(cancellationToken))
       {
-        await fileStream.WriteAsync(b.AsMemory(0, b.Length), cancellationToken);
+        await fileStream.WriteAsync(b.Data.AsMemory(0, b.Length), cancellationToken);
       }
 
       return blobPath;
