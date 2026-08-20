@@ -7,10 +7,16 @@ using MiddleMan.Service.WebSocketClientConnections;
 using MiddleMan.Service.WebSocketClientConnections.Classes;
 using MiddleMan.Service.WebSocketClientMethods;
 using MiddleMan.Service.WebSocketClients;
+using MiddleMan.Web.Communication;
 using MiddleMan.Web.Communication.ClientContracts;
 using MiddleMan.Web.Communication.CommunicationSync.SameServer;
+using MiddleMan.Web.Communication.Mediator;
 using MiddleMan.Web.Communication.Metadata;
 using MiddleMan.Web.Communication.Metadata.Constants;
+using MiddleMan.Web.Communication.Resolver;
+using MiddleMan.Web.Communication.Source;
+using MiddleMan.Web.Communication.SourceSink;
+using MiddleMan.Web.Communication.Target;
 using MiddleMan.Web.Hubs.Models;
 using MiddleMan.Web.Infrastructure.Identity;
 using System.Threading.Channels;
@@ -20,7 +26,6 @@ namespace MiddleMan.Web.Hubs
   [Authorize]
   public class PlaygroundHub(IWebSocketClientsService webSocketClientsService,
     IWebSocketClientMethodService webSocketClientMethodService,
-    StreamingCommunicationManager communicationManager,
     ClientInfoCommunicationManager clientInfoCommunicationManager,
     IntraServerCommunicationManager intraServerCommunicationManager,
     IWebSocketClientConnectionsService webSocketClientConnectionsService,
@@ -31,7 +36,6 @@ namespace MiddleMan.Web.Hubs
     private readonly IWebSocketClientMethodService webSocketClientMethodService = webSocketClientMethodService;
     private readonly ClientInfoCommunicationManager clientInfoCommunicationManager = clientInfoCommunicationManager;
     private readonly IntraServerCommunicationManager intraServerCommunicationManager = intraServerCommunicationManager;
-    private readonly StreamingCommunicationManager communicationManager = communicationManager;
     private readonly ILogger<PlaygroundHub> logger = logger;
 
     #region [Clinet connection hooks]
@@ -143,30 +147,44 @@ namespace MiddleMan.Web.Hubs
       var (id, name, _, _, clientId) = GetClientInfoFromContext();
       await ConnectionChecks(id, name, clientId);
 
-      var session = CommunicationSessionRegistry.GetSession(correlation) 
+      var session = CommunicationSessionRegistry.GetSession(correlation)
         ?? throw new HubException("Communication session not found");
-      
+
       session.ResponseMetadataSource.TrySetResult(metadata);
       session.ChannelReaderSource.TrySetResult(channelReader.AsDataChunkChannelReader());
 
       await session.ReaderCompletion;
     }
 
-    public async IAsyncEnumerable<Memory<byte>> SubscribeToServer(Guid correlation)
+    public async Task<IAsyncEnumerable<Memory<byte>>> SubscribeToServer(Guid correlation)
     {
       var (id, name, _, _, clientId) = GetClientInfoFromContext();
       await ConnectionChecks(id, name, clientId);
 
-      var session = CommunicationSessionRegistry.GetSession(correlation) 
-        ?? throw new HubException("Communication session not found");
-
+      // Create channel
       var channel = Channel.CreateBounded<DataChunk>(new BoundedChannelOptions(1));
-      session.ChannelWriterSource.TrySetResult(channel.Writer);
 
-      await foreach (var chunk in channel.Reader.ReadAllAsync())
+      // Try get exsiting session
+      var session = CommunicationSessionRegistry.GetSession(correlation);
+      
+      // Mark session state and create new control if needed
+      var sessionWasMissing = session != null;
+      var control = sessionWasMissing ? CommunicationSessionRegistry.RegisterSession(correlation) : null;
+
+      // Resolve the writer TaskCompletionSource and register the writer
+      var channelWriterSource = session?.ChannelWriterSource ?? control?.ChannelWriterSource;
+      channelWriterSource?.TrySetResult(channel.Writer);
+
+      // If there was no session, the hub is responsible to control the communication.
+      // Since we need to return data to the client, we will handle the communication on a background Task
+      if (sessionWasMissing)
       {
-        yield return chunk.Data.AsMemory(0, chunk.Length);
+        _ = Task.Run(() => InitiateStreamingCommunication(correlation, 
+          control ?? throw new InvalidOperationException("Control can't be null when initializing client communication")));
       }
+
+      // Consume the channel and yield the data to the client
+      return channel.Reader.ReadAllAsMemory();
     }
 
     // public async Task<DirectInvocationResponse> Invoke(string? userId, string clientName, string method, DirectInvocationData clientData)
@@ -288,7 +306,7 @@ namespace MiddleMan.Web.Hubs
     //       {
     //         logger.LogInformation("Completed invocation for {WebSocketClientName}, method: {Method}. Connection ID: {ConnectionId}", clientName, method, clientConnection.ConnectionId);
     //       }
-          
+
     //       return;
     //     }
     //     catch (Exception ex)
@@ -339,19 +357,23 @@ namespace MiddleMan.Web.Hubs
       return (id, name, email, clientToken, clientId);
     }
 
-    private async Task<ClientConnection?> GetClientConnection(string userId, string webSocketClientName, CancellationToken cancellationToken = default)
+    private async Task InitiateStreamingCommunication(Guid correlation, CommunicationControl control)
     {
-      var clientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(userId, webSocketClientName);
+      var mediator = new SimpleMediator(
+        logger,
+        new CommunicationSourceContext
+        {
+          Source = new ChannelCommunicationSource(correlation, intraServerCommunicationManager),
+          Sink = new ChannelCommunicationSink(correlation, intraServerCommunicationManager)
+        },
+        new ManualTargetResolver(
+          new SameServerWebSocketStreamingInvocationTarget(correlation, control)
+        ),
+        new TargetDescription()
+      );
 
-      if (clientConnection == null && ServerCapabilities.ClusterMode)
-      {
-        clientConnection = await clientInfoCommunicationManager.QueryClientConnection(userId, webSocketClientName, cancellationToken);
-
-        // double check after querying other servers in cluster (in case the client connection was established while we were querying other servers)
-        clientConnection ??= webSocketClientConnectionsService.GetWebSocketClientConnection(userId, webSocketClientName);
-      }
-
-      return clientConnection;
+      // TO DO: see if you can resolve a token
+      await mediator.Mediate(CancellationToken.None);
     }
 
     private static HttpRequestMetadata ProcessMetadata(DirectInvocationData requestData, HubCallerContext context)

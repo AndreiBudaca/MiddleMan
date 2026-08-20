@@ -1,23 +1,21 @@
 using MiddleMan.Core;
-using MiddleMan.Web.Communication.Mediator.Classes;
 using MiddleMan.Web.Communication.Resolver;
 using MiddleMan.Web.Communication.Source;
 
 namespace MiddleMan.Web.Communication.Mediator
 {
   public class FaultTolerantMediator(
-    ILogger<ICommunicationMediator> logger,
+    ILogger logger,
     CommunicationSourceContext context,
     ICommunicationTargetResolver targetResolver,
     TargetDescription targetDescription)
-    : ICommunicationMediator
+    : SimpleMediator(logger, context, targetResolver, targetDescription)
   {
-    private readonly ILogger<ICommunicationMediator> logger = logger;
+    private readonly ILogger logger = logger;
     private readonly CommunicationSourceContext context = context;
-    private readonly ICommunicationTargetResolver targetResolver = targetResolver;
     private readonly TargetDescription targetDescription = targetDescription;
 
-    public async Task<bool> Mediate(CancellationToken cancellationToken = default)
+    public override async Task<bool> Mediate(CancellationToken cancellationToken = default)
     {
       await using var bufferedRequestSource = new BufferedCommunicationSource(context.Source);
 
@@ -30,28 +28,8 @@ namespace MiddleMan.Web.Communication.Mediator
         try
         {
           communicationFailedCts.TryReset();
-
-          var target = await targetResolver.ResolveTarget(targetDescription, communicationFailedCts.Token);
-          if (target == null) return false;
-
-          LogInvocation(retryCount);
-
-          var requestData = await bufferedRequestSource.ReadData(communicationFailedCts.Token);
-
-          var responseSource = await target.WriteData(requestData, communicationFailedCts.Token);
-          if (context.Sink == null) return true;
-
-          if (responseSource == null)
-          {
-            await context.Sink.WriteData(null, communicationFailedCts.Token);
-            return true;
-          }
-
-          await using var bufferedResponseSource = new BufferedResponseData(responseSource);
-          var responseData = await bufferedResponseSource.Read(communicationFailedCts.Token);
-          await context.Sink.WriteData(responseData, communicationFailedCts.Token);
-
-          return true;
+          LogRetry(retryCount);
+          return await base.Mediate(communicationFailedCts.Token);
         }
         catch (Exception ex)
         {
@@ -63,24 +41,12 @@ namespace MiddleMan.Web.Communication.Mediator
       return false;
     }
 
-    private void LogInvocation(int retryCount)
+    private void LogRetry(int retryCount)
     {
       if (!ServerCapabilities.VerboseLogging) return;
-
-
-      if (retryCount == 1)
-      {
-        if (!logger.IsEnabled(LogLevel.Information)) return;
-
-        logger.LogInformation("Invoking {WebSocketClientName}, method: {Method}",
-          targetDescription.Name,
-          targetDescription.Method);
-
-        return;
-      }
-
       if (!logger.IsEnabled(LogLevel.Warning)) return;
-      
+      if (retryCount == 1) return;
+
       logger.LogWarning("Retrying invocation for {WebSocketClientName}, method: {Method}. Attempt {RetryCount} of {MaxRetryAttempts}",
         targetDescription.Name,
         targetDescription.Method,

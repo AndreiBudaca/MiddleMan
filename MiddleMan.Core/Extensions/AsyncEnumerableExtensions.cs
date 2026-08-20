@@ -1,5 +1,4 @@
-﻿using System.Runtime.CompilerServices;
-using MiddleMan.Core.Extensions.Classes.AsyncEnumerable;
+﻿using MiddleMan.Core.Extensions.Classes.AsyncEnumerable;
 
 namespace MiddleMan.Core.Extensions
 {
@@ -67,11 +66,11 @@ namespace MiddleMan.Core.Extensions
       throw new InvalidDataException($"Invalid content lenght. Expected to read {bytesToReceive} from {offset}, but only got {totalBytesReceived}.");
     }
 
-    public static async IAsyncEnumerable<DataChunk> PrependItems(this IAsyncEnumerator<DataChunk> enumerator, DataChunk item)
+    public static async IAsyncEnumerable<T> PrependItems<T>(this IAsyncEnumerator<T> enumerator, T item)
     {
       try
       {
-        if (item.Length > 0)
+        if (item != null)
           yield return item;
 
         while (await enumerator.MoveNextAsync())
@@ -85,7 +84,7 @@ namespace MiddleMan.Core.Extensions
       }
     }
 
-    public static IAsyncEnumerable<DataChunk> PrependItems(this IAsyncEnumerable<DataChunk> enumerable, DataChunk item, CancellationToken cancellationToken)
+    public static IAsyncEnumerable<T> PrependItems<T>(this IAsyncEnumerable<T> enumerable, T item, CancellationToken cancellationToken)
     {
       return enumerable.GetAsyncEnumerator(cancellationToken).PrependItems(item);
     }

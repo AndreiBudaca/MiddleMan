@@ -8,24 +8,44 @@ using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Communication.Target
 {
-  public class SameServerWebSocketStreamingInvocationTarget(
-    ISingleClientProxy clientProxy,
-    string method
-  ) : ICommunicationTarget
+  public class SameServerWebSocketStreamingInvocationTarget : ICommunicationTarget
   {
-    private readonly ISingleClientProxy clientProxy = clientProxy;
-    private readonly string method = method;
+    private readonly Guid? correlation;
+    private readonly CommunicationControl? control;
+    private readonly ISingleClientProxy? clientProxy;
+    private readonly string method;
+
+    public SameServerWebSocketStreamingInvocationTarget(ISingleClientProxy clientProxy, string method)
+    {
+      control = null;
+      correlation = null;
+
+      this.clientProxy = clientProxy;
+      this.method = method;
+    }
+    
+    public SameServerWebSocketStreamingInvocationTarget(Guid correlation, CommunicationControl control)
+    {
+      this.correlation = correlation;
+      this.control = control;
+
+      clientProxy = null;
+      method = string.Empty;
+    }
 
     public async Task<ResponseData?> WriteData(RequestData? data, CancellationToken cancellationToken = default)
     {
-      var correlation = Guid.NewGuid();
-      var communicationControl = CommunicationSessionRegistry.RegisterSession(correlation);
-
-      // Send the correlation ID and metadata to the client to initiate the streaming session
-      await clientProxy.SendAsync(method, correlation, data?.Metadata, cancellationToken);
-
+      var communicationCorrelation = correlation ?? Guid.NewGuid();
+      var communicationControl = control ?? CommunicationSessionRegistry.RegisterSession(communicationCorrelation);
+      
       try
       {
+        // Send the correlation ID and metadata to the client to initiate the streaming session
+        if (clientProxy != null)
+        {
+          await clientProxy.SendAsync(method, communicationCorrelation, data?.Metadata, cancellationToken);
+        }
+
         // Wait for the client to subscribe to the server channel
         using (var timeoutDisposable = communicationControl.ChannelWriterSource.SetTimeout(cancellationToken: cancellationToken))
         {
@@ -58,7 +78,7 @@ namespace MiddleMan.Web.Communication.Target
       }
       finally
       {
-        CommunicationSessionRegistry.RemoveSession(correlation);
+        CommunicationSessionRegistry.RemoveSession(communicationCorrelation);
       }
     }
 

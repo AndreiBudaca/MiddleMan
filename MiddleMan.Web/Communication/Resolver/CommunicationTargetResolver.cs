@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Communication;
 using MiddleMan.Core;
 using MiddleMan.Service.WebSocketClientConnections;
+using MiddleMan.Service.WebSocketClientConnections.Classes;
 using MiddleMan.Web.Communication.Target;
 using MiddleMan.Web.Hubs;
 
@@ -10,9 +11,10 @@ namespace MiddleMan.Web.Communication.Resolver
   public class CommunicationTargetResolver(
     IHubContext<PlaygroundHub> hubContext,
     ClientInfoCommunicationManager clientInfoCommunicationManager,
-    IWebSocketClientConnectionsService webSocketClientConnectionsService
-  ) : ICommunicationTargetResolver
+    IWebSocketClientConnectionsService webSocketClientConnectionsService,
+    IntraServerCommunicationManager intraServerCommunicationManager) : ICommunicationTargetResolver
   {
+    private readonly IntraServerCommunicationManager intraServerCommunicationManager = intraServerCommunicationManager;
     private readonly ClientInfoCommunicationManager clientInfoCommunicationManager = clientInfoCommunicationManager;
     private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
 
@@ -28,14 +30,18 @@ namespace MiddleMan.Web.Communication.Resolver
         clientConnection ??= webSocketClientConnectionsService.GetWebSocketClientConnection(targetDescription.UserId, targetDescription.Name);
       }
 
-      if (clientConnection?.ConnectionId == null) return null;
+      return ResolveFromConnectionInfo(clientConnection, targetDescription.Method);
+    }
 
-      var singleClientProxy = hubContext.Clients.Client(clientConnection.ConnectionId);
+    private ICommunicationTarget? ResolveFromConnectionInfo(ClientConnection? connection, string method)
+    {
+      if (connection?.ConnectionId == null) return null;
 
-      return new SameServerWebSocketStreamingInvocationTarget(
-        singleClientProxy,
-        targetDescription.Method
-      );
+      var singleClientProxy = hubContext.Clients.Client(connection.ConnectionId);
+
+      if (!connection.ClientCapabilities.SupportsStreaming) return new DirectInvocationTarget(singleClientProxy, method);
+      if (connection.SameServerConnection) return new SameServerWebSocketStreamingInvocationTarget(singleClientProxy, method);
+      return new MultiServerWebSocketStreamingInvocationTarget(intraServerCommunicationManager, singleClientProxy, method);
     }
   }
 }

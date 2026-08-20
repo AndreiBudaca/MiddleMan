@@ -15,5 +15,14 @@ namespace MiddleMan.Web.Communication.CommunicationSync.SameServer
     public required TaskCompletionSource<HttpResponseMetadata?> ResponseMetadataSource { get; init; }
 
     public required TaskCompletionSource ReaderCompletionSource { get; init; }
+
+    public void TryCancelAll()
+    {
+      ChannelWriterSource.TrySetCanceled();
+      WriterCompletionSource.TrySetCanceled();
+      ChannelReaderSource.TrySetCanceled();
+      ReaderCompletionSource.TrySetCanceled();
+      ResponseMetadataSource.TrySetCanceled();
+    }
   }
 }

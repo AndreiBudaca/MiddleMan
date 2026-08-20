@@ -7,7 +7,7 @@ namespace MiddleMan.Web.Communication.CommunicationSync.SameServer
 {
   public static class CommunicationSessionRegistry
   {
-    private static readonly ConcurrentDictionary<Guid, CommunicationSession> sessions = new();
+    private static readonly ConcurrentDictionary<Guid, CommunicationControl> sessions = new();
 
     public static CommunicationControl RegisterSession(Guid correlation)
     {
@@ -20,16 +20,7 @@ namespace MiddleMan.Web.Communication.CommunicationSync.SameServer
         ResponseMetadataSource = new TaskCompletionSource<HttpResponseMetadata?>()
       };
 
-      var session = new CommunicationSession
-      {
-        ChannelWriterSource = control.ChannelWriterSource,
-        WriterCompletion = control.WriterCompletionSource.Task,
-        ChannelReaderSource = control.ChannelReaderSource,
-        ReaderCompletion = control.ReaderCompletionSource.Task,
-        ResponseMetadataSource = control.ResponseMetadataSource
-      };
-
-      sessions[correlation] = session;
+      sessions[correlation] = control;
 
       return control;
     }
@@ -37,12 +28,31 @@ namespace MiddleMan.Web.Communication.CommunicationSync.SameServer
     public static CommunicationSession? GetSession(Guid correlation)
     {
       sessions.TryGetValue(correlation, out var session);
-      return session;
+      return ToSession(session);
     }
 
     public static void RemoveSession(Guid correlation)
     {
-      sessions.Remove(correlation, out var _);
+      bool exists = sessions.Remove(correlation, out var session);
+
+      if (!exists) return;
+
+      // Cancel any pending tasks and complete the channel to signal the end of the session
+      session?.TryCancelAll();
+    }
+
+    private static CommunicationSession? ToSession(CommunicationControl? control)
+    {
+      if (control == null) return null;
+
+      return new CommunicationSession
+      {
+        ChannelWriterSource = control.ChannelWriterSource,
+        WriterCompletion = control.WriterCompletionSource.Task,
+        ChannelReaderSource = control.ChannelReaderSource,
+        ReaderCompletion = control.ReaderCompletionSource.Task,
+        ResponseMetadataSource = control.ResponseMetadataSource
+      };
     }
   }
 }

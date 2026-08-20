@@ -1,4 +1,7 @@
-﻿namespace MiddleMan.Web.Communication.Metadata
+﻿using MiddleMan.Core;
+using MiddleMan.Core.Extensions;
+
+namespace MiddleMan.Web.Communication.Metadata
 {
   public class HttpRequestMetadata
   {
@@ -30,14 +33,6 @@
       }
 
       User = user;
-    }
-
-    public byte[] SerializeJson()
-    {
-      var jsonBytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(this);
-      var metadataLength = BitConverter.GetBytes(jsonBytes.Length);
-
-      return metadataLength.Concat(jsonBytes).ToArray();
     }
   }
 }

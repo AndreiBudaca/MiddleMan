@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Communication;
 using MiddleMan.Core;
+using MiddleMan.Core.DataChunkConverters;
+using MiddleMan.Core.Extensions;
 using MiddleMan.Core.Extensions.Classes.AsyncEnumerable;
 using MiddleMan.Web.Communication.Metadata;
 
@@ -28,13 +30,15 @@ namespace MiddleMan.Web.Communication.Target
         // Send the correlation ID and metadata to the client to initiate the streaming session
         await clientProxy.SendAsync(method, correlation, data?.Metadata, cancellationToken);
 
+        var metadataChunk = LenghtPrefixConverter.ToDataChunk(data?.Metadata);
         var requestData = data?.Data ?? new EmptyAsyncEnumerable<DataChunk>();
-        await manager.WriteRequestAsync(requestData, correlation, cancellationToken);
+        await manager.WriteRequestAsync(requestData.PrependItems(metadataChunk, cancellationToken), correlation, cancellationToken);
 
         var responseData = manager.ReadResponseAsync(correlation, cancellationToken);
 
         // Extract metadata from the response data
-        var (responseMetadata, responseDataStream) = await HttpResponseMetadata.ReadFromChunkedData(responseData, cancellationToken);
+        var (responseMetadata, responseDataStream) = await LenghtPrefixConverter
+          .ReadFromChunkedData<HttpResponseMetadata>(responseData, cancellationToken);
 
         // Return the rest of the response data as an IAsyncEnumerable<DataChunk>
         return new ResponseData

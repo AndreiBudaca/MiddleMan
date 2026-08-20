@@ -17,11 +17,11 @@ namespace MiddleMan.Web.Controllers.WebSockets
   [DisableModelBinding]
   public class WebSocketsController(
     IWebSocketClientsService webSocketClientsService,
-    ILogger<ICommunicationMediator> logger,
+    ILogger logger,
     ICommunicationTargetResolver targetResolver) : Controller
   {
+    private readonly ILogger logger = logger;
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
-    private readonly ILogger<ICommunicationMediator> logger = logger;
     private readonly ICommunicationTargetResolver targetResolver = targetResolver;
 
     [RequestSizeLimit(1_000_000_000)]
