@@ -17,10 +17,10 @@ namespace MiddleMan.Web.Controllers.WebSockets
   [DisableModelBinding]
   public class WebSocketsController(
     IWebSocketClientsService webSocketClientsService,
-    ILogger logger,
+    ILogger<WebSocketsController> logger,
     ICommunicationTargetResolver targetResolver) : Controller
   {
-    private readonly ILogger logger = logger;
+    private readonly ILogger<WebSocketsController> logger = logger;
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
     private readonly ICommunicationTargetResolver targetResolver = targetResolver;
 

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.SignalR;
 using MiddleMan.Communication;
 using MiddleMan.Core;
@@ -22,34 +23,86 @@ namespace MiddleMan.Web.Communication.Target
     {
       var correlation = Guid.NewGuid();
 
+      // If the request fail the response stream needs to be also deleted FUCKING HELL
+
+      // Create request session
+      await manager.RegisterRequestSession(correlation);
+
+      // Send the correlation ID and metadata to the client to initiate the streaming session
+      await clientProxy.SendAsync(method, correlation, data?.Metadata, cancellationToken);
+
+      await WriteData(correlation, data, cancellationToken);
+
+      var responseData = manager.ReadResponseAsync(correlation, cancellationToken);
+
+      // Extract metadata from the response data
+      var (responseMetadata, responseDataStream) = await LenghtPrefixConverter
+        .ReadFromChunkedData<HttpResponseMetadata>(responseData, cancellationToken);
+
+      // Return the rest of the response data as an IAsyncEnumerable<DataChunk>
+      return new ResponseData
+      {
+        Metadata = responseMetadata,
+        Data = ConsumeStream(correlation, responseDataStream, cancellationToken)
+      };
+    }
+
+    private async Task WriteData(Guid correlation, RequestData? data, CancellationToken cancellationToken = default)
+    {
       try
       {
-        // Create request session
-        await manager.RegisterRequestSession(correlation);
-
-        // Send the correlation ID and metadata to the client to initiate the streaming session
-        await clientProxy.SendAsync(method, correlation, data?.Metadata, cancellationToken);
-
         var metadataChunk = LenghtPrefixConverter.ToDataChunk(data?.Metadata);
         var requestData = data?.Data ?? new EmptyAsyncEnumerable<DataChunk>();
+        
         await manager.WriteRequestAsync(requestData.PrependItems(metadataChunk, cancellationToken), correlation, cancellationToken);
+        await manager.ClearRequestSession(correlation, false);
+      }
+      catch
+      {
+        await manager.ClearRequestSession(correlation, true);
+        throw;
+      }
+    }
 
+    public async Task<ResponseData> ReadData(Guid correlation, CancellationToken cancellationToken = default)
+    {
+      HttpResponseMetadata? responseMetadata;
+      IAsyncEnumerable<DataChunk>? requestDataStream;
+
+      try
+      {
         var responseData = manager.ReadResponseAsync(correlation, cancellationToken);
 
-        // Extract metadata from the response data
-        var (responseMetadata, responseDataStream) = await LenghtPrefixConverter
-          .ReadFromChunkedData<HttpResponseMetadata>(responseData, cancellationToken);
+        (responseMetadata, requestDataStream) = await LenghtPrefixConverter
+            .ReadFromChunkedData<HttpResponseMetadata>(responseData, cancellationToken);
+      }
+      catch
+      {
+        await manager.MarkResponseHandled(correlation);
+        throw;
+      }
 
-        // Return the rest of the response data as an IAsyncEnumerable<DataChunk>
-        return new ResponseData
+      return new ResponseData
+      {
+        Metadata = responseMetadata,
+        Data = ConsumeStream(correlation, requestDataStream, cancellationToken),
+      };
+    }
+
+    private async IAsyncEnumerable<DataChunk> ConsumeStream(Guid correlation, IAsyncEnumerable<DataChunk>? stream, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+      try
+      {
+        if (stream == null) yield break;
+
+        await foreach (var item in stream.WithCancellation(cancellationToken))
         {
-          Metadata = responseMetadata,
-          Data = responseDataStream
-        };
+          yield return item;
+        }
       }
       finally
       {
-        await manager.ClearRequestSession(correlation);
+        await manager.MarkResponseHandled(correlation);
       }
     }
   }

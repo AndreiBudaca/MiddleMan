@@ -14,7 +14,7 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
 
   public async Task RegisterRequestSession(Guid correlation)
   {
-    requestTokenCounter = new TokenCounter();
+    requestTokenCounter = new TokenCounter(ServerCapabilities.IntraServerBufferedChunks);
 
     await communicationChannel.CreateStreamAsync(RequestChannelChunksKey(correlation));
     await communicationChannel.CreateStreamAsync(ResponseChannelChunksKey(correlation));
@@ -23,20 +23,36 @@ public class IntraServerCommunicationManager(ICommunicationChannel communication
 
   public async Task RegisterResponseSession(Guid correlation)
   {
-    responseTokenCounter = new TokenCounter();
+    responseTokenCounter = new TokenCounter(ServerCapabilities.IntraServerBufferedChunks);
     await RegisterTokens(responseTokenCounter, ResponseChannelTokenKey(correlation), correlation);
   }
 
-  public async Task ClearRequestSession(Guid correlation)
+  public async Task ClearRequestSession(Guid correlation, bool error = false)
   {
     await communicationChannel.UnsubscribeAsync(RequestChannelTokenKey(correlation));
-    await communicationChannel.DeleteStreamAsync(RequestChannelChunksKey(correlation));
-    await communicationChannel.DeleteStreamAsync(ResponseChannelChunksKey(correlation));
+
+    // On error we make sure the stream is also deleted
+    // On success the stream needs to remain so the other server can complete reading from it
+    if (error) await MarkRequestHandled(correlation);
   }
 
-  public async Task ClearResponseSession(Guid correlation)
+  public async Task MarkRequestHandled(Guid correlation)
+  {
+    await communicationChannel.DeleteStreamAsync(RequestChannelChunksKey(correlation));
+  }
+
+  public async Task ClearResponseSession(Guid correlation, bool error = false)
   {
     await communicationChannel.UnsubscribeAsync(ResponseChannelTokenKey(correlation));
+
+    // On error we make sure the stream is also deleted
+    // On success the stream needs to remain so the other server can complete reading from it
+    if (error) await MarkResponseHandled(correlation);
+  }
+
+  public async Task MarkResponseHandled(Guid correlation)
+  {
+    await communicationChannel.DeleteStreamAsync(RequestChannelChunksKey(correlation));
   }
 
   public Task WriteRequestAsync(IAsyncEnumerable<DataChunk> dataSource, Guid correlation, CancellationToken cancellationToken = default)

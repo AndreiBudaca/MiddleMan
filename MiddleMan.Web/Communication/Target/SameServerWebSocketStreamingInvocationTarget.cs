@@ -70,15 +70,18 @@ namespace MiddleMan.Web.Communication.Target
           responseMetadata = await communicationControl.ResponseMetadataSource.Task;
         }
 
+        CommunicationSessionRegistry.RemoveSession(communicationCorrelation);
+
         return new ResponseData
         {
           Metadata = responseMetadata,
           Data = ReadDataFromChannel(channelReader, communicationControl.ReaderCompletionSource, cancellationToken)
         };
       }
-      finally
+      catch
       {
-        CommunicationSessionRegistry.RemoveSession(communicationCorrelation);
+        CommunicationSessionRegistry.RemoveSession(communicationCorrelation, true);
+        throw;
       }
     }
 

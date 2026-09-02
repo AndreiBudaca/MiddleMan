@@ -87,7 +87,7 @@ namespace MiddleMan.Communication.Channels
 
     public Task AddToStreamAsync(string streamKey, DataChunk data)
     {
-      return AddIfStreamExists(streamKey, "type", "data", "data", data.Data.AsMemory(0, data.Length));
+      return AddIfStreamExists(streamKey, "type", "data", "data", (RedisValue)data.Data.AsMemory(0, data.Length));
     }
 
     public Task TerminateWithErrorAsync(string streamKey, string errorMessage)
@@ -177,22 +177,36 @@ namespace MiddleMan.Communication.Channels
       var chunks = new List<byte[]>();
       var streamEnded = false;
 
-      foreach (var streamResult in streamsArray!)
-      {
-        var streamData = (RedisResult[])streamResult!;
-        var messages = (RedisResult[])streamData![1]!;
+      if (streamsArray == null) return (toBeDeleted, chunks, streamEnded);
 
-        foreach (var message in messages!)
+      foreach (var streamResult in streamsArray)
+      {
+        if (streamResult.IsNull) continue;
+        var streamData = (RedisResult[])streamResult!;
+        if (streamData == null || streamData.Length < 2) continue;
+        var messages = (RedisResult[])streamData[1]!;
+        if (messages == null) continue;
+
+        foreach (var message in messages)
         {
+          if (message.IsNull) continue;
           var messageParts = (RedisResult[])message!;
-          var messageId = (string)messageParts![0]!;
+          if (messageParts == null || messageParts.Length < 2) continue;
+          var messageId = (string)messageParts[0]!;
           var fields = (RedisResult[])messageParts[1]!;
+          if (fields == null || fields.Length < 2) continue;
           // fields layout: ["type", <typeValue>, "data", <dataValue>] for data entries
           // fields layout: ["type", "error", "data", <errorMessage>] for error entries
           //                 ["type", "end"] for sentinel entries
-          var type = (string)fields![1]!;
+          //                 ["init", "1"] for stream creation sentinel
+          var type = (string)fields[1]!;
 
-          toBeDeleted.Add(messageId);
+          toBeDeleted.Add((RedisValue)messageId);
+
+          if (type == "init")
+          {
+            continue;
+          }
 
           if (type == "end")
           {
@@ -200,11 +214,16 @@ namespace MiddleMan.Communication.Channels
           }
           else if (type == "error")
           {
+            if (fields.Length < 4) throw new Exception($"Error entry missing message for id '{messageId}'");
             throw new Exception((string)fields[3]!);
           }
           else
           {
-            chunks.Add((byte[])fields[3]!);
+            if (fields.Length < 4) continue;
+            RedisValue dataValue = (RedisValue)fields[3];
+            byte[]? bytes = dataValue;
+            if (bytes == null) continue;
+            chunks.Add(bytes);
           }
         }
       }
@@ -214,12 +233,16 @@ namespace MiddleMan.Communication.Channels
 
     private async Task AddIfStreamExists(string streamKey, params RedisValue[] values)
     {
-      var result = await database.ExecuteAsync(
-        "XADD",
-        streamKey,
-        "NOMKSTREAM",
-        "*",
-        values);
+      var args = new object[3 + values.Length];
+      args[0] = streamKey;
+      args[1] = "NOMKSTREAM";
+      args[2] = "*";
+      for (int i = 0; i < values.Length; i++)
+      {
+        args[3 + i] = values[i];
+      }
+
+      var result = await database.ExecuteAsync("XADD", args);
 
       if (result.IsNull)
       {

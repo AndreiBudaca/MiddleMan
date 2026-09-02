@@ -156,7 +156,7 @@ namespace MiddleMan.Web.Hubs
       await session.ReaderCompletion;
     }
 
-    public async Task<IAsyncEnumerable<Memory<byte>>> SubscribeToServer(Guid correlation)
+    public async IAsyncEnumerable<Memory<byte>> SubscribeToServer(Guid correlation)
     {
       var (id, name, _, _, clientId) = GetClientInfoFromContext();
       await ConnectionChecks(id, name, clientId);
@@ -166,9 +166,9 @@ namespace MiddleMan.Web.Hubs
 
       // Try get exsiting session
       var session = CommunicationSessionRegistry.GetSession(correlation);
-      
+
       // Mark session state and create new control if needed
-      var sessionWasMissing = session != null;
+      var sessionWasMissing = session == null;
       var control = sessionWasMissing ? CommunicationSessionRegistry.RegisterSession(correlation) : null;
 
       // Resolve the writer TaskCompletionSource and register the writer
@@ -177,14 +177,27 @@ namespace MiddleMan.Web.Hubs
 
       // If there was no session, the hub is responsible to control the communication.
       // Since we need to return data to the client, we will handle the communication on a background Task
+      Task? multiServerCommunicationTask = null;
       if (sessionWasMissing)
       {
-        _ = Task.Run(() => InitiateStreamingCommunication(correlation, 
+        // TO DO: Use custom exceptions
+        multiServerCommunicationTask = Task.Run(() => InitiateStreamingCommunication(correlation,
           control ?? throw new InvalidOperationException("Control can't be null when initializing client communication")));
       }
 
       // Consume the channel and yield the data to the client
-      return channel.Reader.ReadAllAsMemory();
+      // TO DO: add a timeout for the channel reading to avoid hanging indefinitely if data isn't received
+      try
+      {
+        await foreach (var chunk in channel.Reader.ReadAllAsync())
+        {
+          yield return chunk.Data.AsMemory(0, chunk.Length);
+        }
+      }
+      finally
+      {
+        if (multiServerCommunicationTask != null) await multiServerCommunicationTask;
+      }
     }
 
     // public async Task<DirectInvocationResponse> Invoke(string? userId, string clientName, string method, DirectInvocationData clientData)

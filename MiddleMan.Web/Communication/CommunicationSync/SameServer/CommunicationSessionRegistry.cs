@@ -31,11 +31,11 @@ namespace MiddleMan.Web.Communication.CommunicationSync.SameServer
       return ToSession(session);
     }
 
-    public static void RemoveSession(Guid correlation)
+    public static void RemoveSession(Guid correlation, bool cancel = false)
     {
       bool exists = sessions.Remove(correlation, out var session);
 
-      if (!exists) return;
+      if (!exists || !cancel) return;
 
       // Cancel any pending tasks and complete the channel to signal the end of the session
       session?.TryCancelAll();

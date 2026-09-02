@@ -3,7 +3,7 @@ using MiddleMan.Core;
 using MiddleMan.Core.DataChunkConverters;
 using MiddleMan.Core.Extensions;
 using MiddleMan.Core.Extensions.Classes.AsyncEnumerable;
-using MiddleMan.Web.Communication.Metadata;
+
 
 namespace MiddleMan.Web.Communication.SourceSink
 {
@@ -14,10 +14,21 @@ namespace MiddleMan.Web.Communication.SourceSink
   {
     public async Task WriteData(ResponseData? data, CancellationToken cancellationToken = default)
     {
-      var metadataChunk = LenghtPrefixConverter.ToDataChunk(data?.Metadata);
-      var dataStream = data?.Data ?? new EmptyAsyncEnumerable<DataChunk>();
+      await communicationManager.RegisterResponseSession(correlation);
 
-      await communicationManager.WriteRequestAsync(dataStream.PrependItems(metadataChunk, cancellationToken), correlation, cancellationToken);
+      try
+      {
+        var metadataChunk = LenghtPrefixConverter.ToDataChunk(data?.Metadata);
+        var dataStream = data?.Data ?? new EmptyAsyncEnumerable<DataChunk>();
+
+        await communicationManager.WriteResponseAsync(dataStream.PrependItems(metadataChunk, cancellationToken), correlation, cancellationToken);
+        await communicationManager.ClearResponseSession(correlation, false);
+      }
+      catch
+      {
+        await communicationManager.ClearResponseSession(correlation, true);
+        throw;
+      }
     }
   }
 }

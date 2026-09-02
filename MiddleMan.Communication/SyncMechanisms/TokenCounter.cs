@@ -2,9 +2,9 @@ using Nito.AsyncEx;
 
 namespace MiddleMan.Communication.SyncMechanisms
 {
-  public class TokenCounter
+  public class TokenCounter(int capacity)
   {
-    private int count = 0;
+    private int count = capacity;
     private readonly AsyncMonitor monitor = new();
 
     public void Increment()

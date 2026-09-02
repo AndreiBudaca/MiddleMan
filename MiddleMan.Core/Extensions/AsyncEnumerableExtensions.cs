@@ -6,7 +6,7 @@ namespace MiddleMan.Core.Extensions
   {
     public static async Task<AsyncEnumResult> EnumerateUntil(this IAsyncEnumerable<DataChunk> data, int bytesToReceive, int offset, CancellationToken cancellationToken)
     {
-      var received = new DataChunk(bytesToReceive);
+      var received = new DataChunk(new byte[bytesToReceive], 0);
       var totalBytesReceived = 0;
       var bytesCopied = 0;
 

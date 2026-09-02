@@ -1,4 +1,6 @@
+using System.Runtime.CompilerServices;
 using MiddleMan.Communication;
+using MiddleMan.Core;
 using MiddleMan.Core.DataChunkConverters;
 using MiddleMan.Web.Communication.Metadata;
 
@@ -11,16 +13,44 @@ namespace MiddleMan.Web.Communication.Source
   {
     public async Task<RequestData> ReadData(CancellationToken cancellationToken = default)
     {
-      var responseData = communicationManager.ReadResponseAsync(correlation, cancellationToken);
+      HttpRequestMetadata? requestMetadata;
+      IAsyncEnumerable<DataChunk>? requestDataStream;
 
-      var (requestMetadata, responseDataStream) = await LenghtPrefixConverter
-          .ReadFromChunkedData<HttpRequestMetadata>(responseData, cancellationToken);
+      try
+      {
+        var requestData = communicationManager.ReadRequestAsync(correlation, cancellationToken);
+
+        (requestMetadata, requestDataStream) = await LenghtPrefixConverter
+            .ReadFromChunkedData<HttpRequestMetadata>(requestData, cancellationToken);
+      }
+      catch
+      {
+        await communicationManager.MarkRequestHandled(correlation);
+        throw;
+      }
 
       return new RequestData
       {
         Metadata = requestMetadata,
-        Data = responseDataStream
+        Data = ConsumeStream(requestDataStream, cancellationToken),
       };
+    }
+
+    private async IAsyncEnumerable<DataChunk> ConsumeStream(IAsyncEnumerable<DataChunk>? stream, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+      try
+      {
+        if (stream == null) yield break;
+
+        await foreach (var item in stream.WithCancellation(cancellationToken))
+        {
+          yield return item;
+        }
+      }
+      finally
+      {
+        await communicationManager.MarkRequestHandled(correlation);
+      }
     }
   }
 }
