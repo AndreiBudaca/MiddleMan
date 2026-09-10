@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+  		<PackageReference Include="NATS.Net" Version="2.7.1" />
   		<PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
       <PackageReference Include="StackExchange.Redis" Version="3.1.13" />
   </ItemGroup>

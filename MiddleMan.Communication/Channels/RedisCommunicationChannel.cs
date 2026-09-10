@@ -30,13 +30,13 @@ namespace MiddleMan.Communication.Channels
     }
 
     #region "PUB/SUB"
-    public Task PublishAsync<T>(string topic, T message)
+    public Task PublishAsync<T>(string subject, T message, CancellationToken cancellationToken)
     {
       var serializedMessage = SerializeMessage(message);
-      return subscriber.PublishAsync(RedisChannel.Literal(topic), serializedMessage);
+      return subscriber.PublishAsync(RedisChannel.Literal(subject), serializedMessage);
     }
 
-    public Task SubscribeAsync<T>(string topic, Func<T, Task> onMessageReceived)
+    public Task SubscribeAsync<T>(string topic, Func<T, Task> onMessageReceived, CancellationToken cancellationToken = default)
     {
       return subscriber.SubscribeAsync(RedisChannel.Literal(topic), async (channel, message) =>
       {
@@ -44,6 +44,21 @@ namespace MiddleMan.Communication.Channels
          throw new Exception($"Failed to deserialize message for topic '{topic}'");
         await onMessageReceived(deserializedMessage);
       });
+    }
+
+    public Task<TReply?> RequestAsync<TRequest, TReply>(string subject, TRequest request, CancellationToken cancellationToken = default)
+    {
+      throw new NotImplementedException();
+    }
+
+    public Task SubscribeRequestAsync<TRequest, TReply>(string subject, Func<TRequest, Task<TReply?>> handler, CancellationToken cancellationToken = default)
+    {
+      throw new NotImplementedException();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+      return ValueTask.CompletedTask;
     }
 
     public async Task<Task<T?>> PeekChannelAsync<T>(string topic, CancellationToken cancellationToken = default)

@@ -14,19 +14,14 @@ namespace MiddleMan.Communication
 
     public async Task StartListening(string identifier, string name)
     {
-      await communicationChannel.SubscribeAsync(ClientInfoQueryChannelKey(identifier, name), async (ClientQuery query) =>
-      {
-        switch (query.Query)
+      await communicationChannel.SubscribeRequestAsync<ClientQuery, ClientConnection>(
+        ClientInfoQueryChannelKey(identifier, name),
+        async query =>
         {
-          case ClientInfoQueries.ConnectionId:
-            var clientConnection = webSocketClientConnectionsService.GetWebSocketClientConnection(identifier, name);
-            if (clientConnection != null)
-            {
-              await communicationChannel.PublishAsync(ClientInfoConnectionResponseChannelKey(identifier, name, query.RespondTo), clientConnection);
-            }
-            break;
-        }
-      });
+          if (query.Query != ClientInfoQueries.ConnectionId) return null;
+
+          return webSocketClientConnectionsService.GetWebSocketClientConnection(identifier, name);
+        });
     }
 
     public async Task StopListening(string identifier, string name)
@@ -41,11 +36,11 @@ namespace MiddleMan.Communication
 
       try
       {
-        var queryKey = Guid.NewGuid().ToString();
-        var responseTask = await communicationChannel.PeekChannelAsync<ClientConnection>(ClientInfoConnectionResponseChannelKey(identifier, name, queryKey), cts.Token);
-        await communicationChannel.PublishAsync(ClientInfoQueryChannelKey(identifier, name), new ClientQuery { Query = ClientInfoQueries.ConnectionId, RespondTo = queryKey });
+        var response = await communicationChannel.RequestAsync<ClientQuery, ClientConnection>(
+          ClientInfoQueryChannelKey(identifier, name),
+          new ClientQuery { Query = ClientInfoQueries.ConnectionId },
+          cts.Token);
 
-        var response = await responseTask;
         if (response == null) return null;
 
         response.SameServerConnection = false;
@@ -58,6 +53,5 @@ namespace MiddleMan.Communication
     }
 
     private static string ClientInfoQueryChannelKey(string identifier, string name) => $"client-info-query:{identifier}:{name}";
-    private static string ClientInfoConnectionResponseChannelKey(string identifier, string name, string queryKey) => $"client-info-connection-response:{identifier}:{name}:{queryKey}";
   }
 }

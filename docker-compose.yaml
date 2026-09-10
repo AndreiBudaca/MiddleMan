@@ -5,9 +5,11 @@ services:
       - middleman.env
     environment:
       - ConnectionStrings__Redis=redis:6379
+      - ConnectionStrings__Nats=nats:4222
       - ASPNETCORE_HTTP_PORTS=80
     depends_on:
       - redis
+      - nats
     networks:
       - middleman-net
     ports:
@@ -15,6 +17,12 @@ services:
 
   redis:
     image: redis:7.2
+    networks:
+      - middleman-net
+
+  nats:
+    image: nats:2.11-alpine
+    command: "-js"
     networks:
       - middleman-net
 

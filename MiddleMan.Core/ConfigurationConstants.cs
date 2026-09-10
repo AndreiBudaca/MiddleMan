@@ -19,6 +19,7 @@
     public static class ConnectionStrings
     {
       public const string Redis = "Redis";
+      public const string Nats = "Nats";
       public const string Sqlite = "Sqlite";
       public const string Postgres = "Postgres";
       public const string MySql = "MySql";

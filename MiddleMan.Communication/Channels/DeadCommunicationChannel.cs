@@ -25,14 +25,19 @@ namespace MiddleMan.Communication.Channels
       return Task.CompletedTask;
     }
 
-    public Task<Task<T?>> PeekChannelAsync<T>(string topic, CancellationToken cancellationToken = default)
-    {
-      return Task.FromResult(Task.FromResult<T?>(default));
-    }
-
-    public Task PublishAsync<T>(string topic, T message)
+    public Task PublishAsync<T>(string subject, T message, CancellationToken cancellationToken)
     {
       return Task.CompletedTask;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+      return ValueTask.CompletedTask;
+    }
+
+    public Task<TReply?> RequestAsync<TRequest, TReply>(string subject, TRequest request, CancellationToken cancellationToken = default)
+    {
+      return Task.FromResult<TReply?>(default);
     }
 
     public Task SignalStreamEndAsync(string streamKey)
@@ -40,7 +45,12 @@ namespace MiddleMan.Communication.Channels
       return Task.CompletedTask;
     }
 
-    public Task SubscribeAsync<T>(string topic, Func<T, Task> onMessageReceived)
+    public Task SubscribeAsync<T>(string topic, Func<T, Task> onMessageReceived, CancellationToken cancellationToken = default)
+    {
+      return Task.CompletedTask;
+    }
+
+    public Task SubscribeRequestAsync<TRequest, TReply>(string subject, Func<TRequest, Task<TReply?>> handler, CancellationToken cancellationToken = default)
     {
       return Task.CompletedTask;
     }

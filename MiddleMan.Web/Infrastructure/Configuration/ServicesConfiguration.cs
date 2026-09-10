@@ -49,10 +49,15 @@ namespace MiddleMan.Web.Infrastructure.Configuration
       // Add cummunication channels
       if (ServerCapabilities.ClusterMode)
       {
-        services.AddSingleton<ICommunicationChannel, RedisCommunicationChannel>(service =>
-          new RedisCommunicationChannel(
-            service.GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis)!,
-            service.GetRequiredService<IInMemoryContext>())
+        var natsConnectionString = services.BuildServiceProvider().GetRequiredService<IConfiguration>().GetConnectionString(ConfigurationConstants.ConnectionStrings.Nats);
+
+        if (string.IsNullOrEmpty(natsConnectionString))
+        {
+          throw new InvalidOperationException("NATS connection string is not configured.");
+        }
+
+        services.AddSingleton<ICommunicationChannel, NatsCommunicationChannel>(service =>
+          new NatsCommunicationChannel(natsConnectionString)
         );
       }
       else
