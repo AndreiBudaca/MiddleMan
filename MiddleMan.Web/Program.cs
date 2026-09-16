@@ -7,6 +7,7 @@ using MiddleMan.Web.Infrastructure.Attributes;
 using MiddleMan.Web.Infrastructure.Configuration;
 using MiddleMan.Web.Infrastructure.Converters;
 using MiddleMan.Web.Infrastructure.Tokens;
+using Microsoft.AspNetCore.SignalR;
 
 namespace MiddleMan.Web
 {
@@ -54,8 +55,8 @@ namespace MiddleMan.Web
 
       if (ServerCapabilities.ClusterMode)
       {
-        signalRBuilder.AddStackExchangeRedis(builder.Configuration.GetConnectionString(ConfigurationConstants.ConnectionStrings.Redis) 
-          ?? throw new InvalidOperationException("Redis connection string is not configured."));
+        signalRBuilder.AddNats(builder.Configuration.GetConnectionString(ConfigurationConstants.ConnectionStrings.Nats)
+          ?? throw new InvalidOperationException("NATS connection string is not configured."));
       }
 
       builder.Services

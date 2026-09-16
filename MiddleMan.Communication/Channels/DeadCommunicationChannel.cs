@@ -5,7 +5,7 @@ namespace MiddleMan.Communication.Channels
 {
   public class DeadCommunicationChannel : ICommunicationChannel
   {
-    public Task AddToStreamAsync(string streamKey, DataChunk data)
+    public Task PublishToStreamAsync(string streamKey, IAsyncEnumerable<DataChunk> source, CancellationToken cancellationToken = default)
     {
       return Task.CompletedTask;
     }
@@ -13,11 +13,6 @@ namespace MiddleMan.Communication.Channels
     public async IAsyncEnumerable<DataChunk> ConsumeStreamAsync(string streamKey, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
       yield break;
-    }
-
-    public Task CreateStreamAsync(string streamKey)
-    {
-      return Task.CompletedTask;
     }
 
     public Task DeleteStreamAsync(string streamKey)
@@ -32,6 +27,7 @@ namespace MiddleMan.Communication.Channels
 
     public ValueTask DisposeAsync()
     {
+      GC.SuppressFinalize(this);
       return ValueTask.CompletedTask;
     }
 
@@ -40,22 +36,12 @@ namespace MiddleMan.Communication.Channels
       return Task.FromResult<TReply?>(default);
     }
 
-    public Task SignalStreamEndAsync(string streamKey)
-    {
-      return Task.CompletedTask;
-    }
-
     public Task SubscribeAsync<T>(string topic, Func<T, Task> onMessageReceived, CancellationToken cancellationToken = default)
     {
       return Task.CompletedTask;
     }
 
     public Task SubscribeRequestAsync<TRequest, TReply>(string subject, Func<TRequest, Task<TReply?>> handler, CancellationToken cancellationToken = default)
-    {
-      return Task.CompletedTask;
-    }
-
-    public Task TerminateWithErrorAsync(string streamKey, string errorMessage)
     {
       return Task.CompletedTask;
     }

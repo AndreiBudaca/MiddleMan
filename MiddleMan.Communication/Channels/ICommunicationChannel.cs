@@ -22,13 +22,7 @@ namespace MiddleMan.Communication.Channels
     #endregion
 
     #region "STREAMS"
-    public Task CreateStreamAsync(string streamKey);
-
-    public Task AddToStreamAsync(string streamKey, DataChunk data);
-    
-    public Task TerminateWithErrorAsync(string streamKey, string errorMessage);
-
-    public Task SignalStreamEndAsync(string streamKey);
+    public Task PublishToStreamAsync(string streamKey, IAsyncEnumerable<DataChunk> source, CancellationToken cancellationToken = default);
 
     public IAsyncEnumerable<DataChunk> ConsumeStreamAsync(string streamKey, CancellationToken cancellationToken);
 

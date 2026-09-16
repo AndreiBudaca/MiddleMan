@@ -22,12 +22,7 @@ namespace MiddleMan.Web.Communication.Target
     public async Task<ResponseData?> WriteData(RequestData? data, CancellationToken cancellationToken = default)
     {
       var correlation = Guid.NewGuid();
-
-      // If the request fail the response stream needs to be also deleted FUCKING HELL
-
-      // Create request session
-      await manager.RegisterRequestSession(correlation);
-
+      
       // Send the correlation ID and metadata to the client to initiate the streaming session
       await clientProxy.SendAsync(method, correlation, data?.Metadata, cancellationToken);
 

@@ -14,8 +14,6 @@ namespace MiddleMan.Web.Communication.SourceSink
   {
     public async Task WriteData(ResponseData? data, CancellationToken cancellationToken = default)
     {
-      await communicationManager.RegisterResponseSession(correlation);
-
       try
       {
         var metadataChunk = LenghtPrefixConverter.ToDataChunk(data?.Metadata);
