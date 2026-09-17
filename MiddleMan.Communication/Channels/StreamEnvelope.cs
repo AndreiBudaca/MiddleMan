@@ -1,9 +1,5 @@
 namespace MiddleMan.Communication.Channels
 {
-  /// <summary>
-  /// Framing envelope for chunked streams transported over NATS JetStream.
-  /// Backpressure, end-of-stream and error propagation are owned by the channel.
-  /// </summary>
   public sealed class StreamEnvelope
   {
     public const string DataKind = "data";

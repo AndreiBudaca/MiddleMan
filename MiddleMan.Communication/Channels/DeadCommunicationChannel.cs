@@ -20,11 +20,6 @@ namespace MiddleMan.Communication.Channels
       return Task.CompletedTask;
     }
 
-    public Task PublishAsync<T>(string subject, T message, CancellationToken cancellationToken)
-    {
-      return Task.CompletedTask;
-    }
-
     public ValueTask DisposeAsync()
     {
       GC.SuppressFinalize(this);
@@ -36,19 +31,16 @@ namespace MiddleMan.Communication.Channels
       return Task.FromResult<TReply?>(default);
     }
 
-    public Task SubscribeAsync<T>(string topic, Func<T, Task> onMessageReceived, CancellationToken cancellationToken = default)
+    public Task<IAsyncDisposable> SubscribeRequestAsync<TRequest, TReply>(string subject, Func<TRequest, TReply?> handler)
     {
-      return Task.CompletedTask;
+      return Task.FromResult<IAsyncDisposable>(NullSubscription.Instance);
     }
 
-    public Task SubscribeRequestAsync<TRequest, TReply>(string subject, Func<TRequest, Task<TReply?>> handler, CancellationToken cancellationToken = default)
+    private sealed class NullSubscription : IAsyncDisposable
     {
-      return Task.CompletedTask;
-    }
+      public static readonly NullSubscription Instance = new();
 
-    public Task UnsubscribeAsync(string topic)
-    {
-      return Task.CompletedTask;
+      public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
   }
 }

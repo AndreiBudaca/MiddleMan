@@ -10,6 +10,7 @@ using MiddleMan.Communication;
 using MiddleMan.Communication.Channels;
 using MiddleMan.Service.Blobs.OracleObjectStorage;
 using MiddleMan.Web.Communication.Resolver;
+using Microsoft.Extensions.Logging;
 
 namespace MiddleMan.Web.Infrastructure.Configuration
 {
@@ -57,7 +58,7 @@ namespace MiddleMan.Web.Infrastructure.Configuration
         }
 
         services.AddSingleton<ICommunicationChannel, NatsCommunicationChannel>(service =>
-          new NatsCommunicationChannel(natsConnectionString)
+          new NatsCommunicationChannel(natsConnectionString, service.GetRequiredService<ILogger<NatsCommunicationChannel>>())
         );
       }
       else

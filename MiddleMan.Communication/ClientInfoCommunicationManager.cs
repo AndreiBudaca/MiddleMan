@@ -12,21 +12,26 @@ namespace MiddleMan.Communication
     private readonly ICommunicationChannel communicationChannel = communicationChannel;
     private readonly IWebSocketClientConnectionsService webSocketClientConnectionsService = webSocketClientConnectionsService;
 
-    public async Task StartListening(string identifier, string name)
+    public Task StartListening(string identifier, string name)
     {
-      await communicationChannel.SubscribeRequestAsync<ClientQuery, ClientConnection>(
-        ClientInfoQueryChannelKey(identifier, name),
-        async query =>
-        {
-          if (query.Query != ClientInfoQueries.ConnectionId) return null;
-
-          return webSocketClientConnectionsService.GetWebSocketClientConnection(identifier, name);
-        });
+      var key = ClientInfoQueryChannelKey(identifier, name);
+      return ClientInfoSubscriptionRegistry.GetOrAddAsync(
+        key,
+        () => communicationChannel.SubscribeRequestAsync<ClientQuery, ClientConnection>(
+          key,
+          query => HandleQueryAsync(query, identifier, name)));
     }
 
-    public async Task StopListening(string identifier, string name)
+    public Task StopListening(string identifier, string name)
     {
-      await communicationChannel.UnsubscribeAsync(ClientInfoQueryChannelKey(identifier, name));
+      return ClientInfoSubscriptionRegistry.RemoveAndDisposeAsync(ClientInfoQueryChannelKey(identifier, name));
+    }
+
+    private ClientConnection? HandleQueryAsync(ClientQuery query, string identifier, string name)
+    {
+      if (query.Query != ClientInfoQueries.ConnectionId) return null;
+
+      return webSocketClientConnectionsService.GetWebSocketClientConnection(identifier, name);
     }
 
     public async Task<ClientConnection?> QueryClientConnection(string identifier, string name, CancellationToken cancellationToken = default)
@@ -52,6 +57,6 @@ namespace MiddleMan.Communication
       }
     }
 
-    private static string ClientInfoQueryChannelKey(string identifier, string name) => $"client-info-query:{identifier}:{name}";
+    private static string ClientInfoQueryChannelKey(string identifier, string name) => $"client-info-query.{identifier}.{name}";
   }
 }

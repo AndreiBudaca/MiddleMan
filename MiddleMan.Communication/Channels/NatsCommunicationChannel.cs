@@ -1,12 +1,13 @@
-using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using MiddleMan.Core;
-using MiddleMan.Core.Extensions;
+using Microsoft.Extensions.Logging;
 using NATS.Client.Core;
 using NATS.Client.JetStream;
 using NATS.Client.JetStream.Models;
 using NATS.Net;
+using MiddleMan.Communication.Channels.Classes;
+using MiddleMan.Communication.Channels.Serialization;
 
 namespace MiddleMan.Communication.Channels
 {
@@ -16,169 +17,116 @@ namespace MiddleMan.Communication.Channels
     private const string IntraServerSubjectPrefix = "intra-server";
 
     private readonly NatsConnection _nats;
-    private readonly ConcurrentDictionary<string, List<CancellationTokenSource>> _subscriptions = new();
-    private readonly ConcurrentDictionary<string, List<Task>> _subscriptionTasks = new();
-    private readonly object _subscriptionsLock = new();
-    private volatile bool _connected;
+    private readonly ILogger<NatsCommunicationChannel>? _logger;
     private volatile bool _jetStreamReady;
     private readonly SemaphoreSlim _connectLock = new(1, 1);
 
-    public NatsCommunicationChannel(string connectionString)
+    public NatsCommunicationChannel(string connectionString, ILogger<NatsCommunicationChannel>? logger = null)
     {
       var opts = new NatsOpts
       {
         Url = connectionString,
         RequestTimeout = TimeSpan.FromSeconds(ServerCapabilities.ClientConnectionTimeoutSeconds),
         RequestReplyMode = NatsRequestReplyMode.SharedInbox,
+        SerializerRegistry = new NatsJsonContextSerializerRegistry(MiddleManNatsJsonContext.Default),
       };
       _nats = new NatsConnection(opts);
+      _logger = logger;
     }
-
-    private async Task EnsureConnectedAsync(CancellationToken cancellationToken = default)
-    {
-      if (_connected && _nats.ConnectionState == NatsConnectionState.Open) return;
-
-      await _connectLock.WaitAsync(cancellationToken);
-      try
-      {
-        if (_connected && _nats.ConnectionState == NatsConnectionState.Open) return;
-
-        await _nats.ConnectAsync();
-        _connected = true;
-      }
-      finally
-      {
-        _connectLock.Release();
-      }
-    }
-
-    #region PUB / SUB
-    public async Task PublishAsync<T>(string subject, T message, CancellationToken cancellationToken = default)
-    {
-      await EnsureConnectedAsync(cancellationToken);
-      await _nats.PublishAsync(subject, message, cancellationToken: cancellationToken);
-    }
-
-    public async Task SubscribeAsync<T>(string topic, Func<T, Task> onMessageReceived, CancellationToken cancellationToken = default)
-    {
-      await EnsureConnectedAsync(cancellationToken);
-
-      var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-      lock (_subscriptionsLock)
-      {
-        _subscriptions.AddOrUpdate(topic, cts);
-      }
-
-      var task = Task.Run(async () =>
-      {
-        try
-        {
-          await foreach (var msg in _nats.SubscribeAsync<T>(topic, cancellationToken: cts.Token))
-          {
-            if (msg.Data == null) continue;
-            await onMessageReceived(msg.Data);
-          }
-        }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested) { }
-      }, cts.Token);
-
-      lock (_subscriptionsLock)
-      {
-        _subscriptionTasks.AddOrUpdate(topic, task);
-      }
-    }
-
-    public async Task UnsubscribeAsync(string topic)
-    {
-      List<CancellationTokenSource>? ctsList = null;
-      List<Task>? tasks = null;
-
-      lock (_subscriptionsLock)
-      {
-        _subscriptions.TryRemove(topic, out ctsList);
-        _subscriptionTasks.TryRemove(topic, out tasks);
-      }
-
-      if (ctsList != null)
-      {
-        foreach (var cts in ctsList)
-        {
-          cts.Cancel();
-          cts.Dispose();
-        }
-      }
-
-      if (tasks != null)
-      {
-        try { await Task.WhenAll(tasks); } catch { }
-      }
-    }
-
-    #endregion
 
     #region REQUEST / REPLY
+     private static readonly NatsSubOpts _requestSubscriptionOpts = new()
+    {
+      ThrowIfNoResponders = false,
+    };
+
+    private static readonly TimeSpan _requestResubscribeDelay = TimeSpan.FromSeconds(5);
 
     public async Task<TReply?> RequestAsync<TRequest, TReply>(string subject, TRequest request, CancellationToken cancellationToken = default)
     {
-      await EnsureConnectedAsync(cancellationToken);
+      var reply = await _nats.RequestAsync<TRequest, TReply>(subject, request, replyOpts: _requestSubscriptionOpts, cancellationToken: cancellationToken);
 
-      var replyOpts = new NatsSubOpts
-      {
-        Timeout = TimeSpan.FromSeconds(ServerCapabilities.ClientConnectionTimeoutSeconds),
-        ThrowIfNoResponders = true
-      };
-
-      try
-      {
-        var reply = await _nats.RequestAsync<TRequest, TReply>(subject, request, replyOpts: replyOpts, cancellationToken: cancellationToken);
-
-        return reply.Data;
-      }
-      catch (Exception ex) when (ex is NatsNoRespondersException || ex is NatsTimeoutException)
+      if (reply.HasNoResponders)
       {
         return default;
       }
+
+      return reply.Data;
     }
 
-    public async Task SubscribeRequestAsync<TRequest, TReply>(string subject, Func<TRequest, Task<TReply?>> handler, CancellationToken cancellationToken = default)
+    public async Task<IAsyncDisposable> SubscribeRequestAsync<TRequest, TReply>(string subject, Func<TRequest, TReply?> handler)
     {
-      await EnsureConnectedAsync(cancellationToken);
+      var cts = new CancellationTokenSource();
 
-      var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-      lock (_subscriptionsLock)
-      {
-        _subscriptions.AddOrUpdate(subject, cts);
-      }
+      var loop = Task.Run(() => RunRequestLoopAsync(subject, handler, cts), CancellationToken.None);
 
-      var task = Task.Run(async () =>
+      return new RequestSubscription(cts, loop);
+    }
+
+    private async Task RunRequestLoopAsync<TRequest, TReply>(string subject, Func<TRequest, TReply?> handler, CancellationTokenSource cts)
+    {
+      while (!cts.IsCancellationRequested)
       {
         try
         {
           await foreach (var msg in _nats.SubscribeAsync<TRequest>(subject, cancellationToken: cts.Token))
           {
+            TReply? reply;
             try
             {
               if (msg.Data == null) continue;
 
-              var reply = await handler(msg.Data);
+              reply = handler(msg.Data);
               if (reply == null) continue;
-
-              await msg.ReplyAsync(reply, cancellationToken: cts.Token);
             }
             catch (Exception ex)
             {
-              // TODO: Replace with logger
-              Console.WriteLine($"Error handling request for subject '{subject}': {ex}");
+              _logger?.LogError(ex, "Error handling request for subject '{Subject}'", subject);
+              continue;
+            }
+
+            try
+            {
+              // Subscription lifetime must not cancel in-flight replies.
+              await msg.ReplyAsync(reply, cancellationToken: CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+              _logger?.LogWarning(ex, "Failed to publish reply for subject '{Subject}'", subject);
             }
           }
-        }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested) { }
-      }, cts.Token);
 
-      lock (_subscriptionsLock)
-      {
-        _subscriptionTasks.AddOrUpdate(subject, task);
+          cts.Token.ThrowIfCancellationRequested();
+
+          // The subscription ended without cancellation (e.g. transient NATS failure
+          // surfaced as graceful completion). Fall through to the retry below.
+          _logger?.LogWarning("Request subscription for subject '{Subject}' ended unexpectedly, resubscribing", subject);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+          break;
+        }
+        catch (ObjectDisposedException) when (cts.IsCancellationRequested)
+        {
+          break;
+        }
+        catch (Exception ex)
+        {
+          _logger?.LogWarning(ex, "Request subscription for subject '{Subject}' failed, resubscribing", subject);
+        }
+
+        try
+        {
+          await Task.Delay(_requestResubscribeDelay, cts.Token);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+          break;
+        }
+        catch (ObjectDisposedException) when (cts.IsCancellationRequested)
+        {
+          break;
+        }
       }
     }
 
@@ -192,7 +140,6 @@ namespace MiddleMan.Communication.Channels
       var creditSubject = CreditSubjectFor(subject);
       await EnsureJetStreamAsync(cancellationToken);
       var js = _nats.CreateJetStreamContext();
-      var bufferedChunks = Math.Max(1, ServerCapabilities.IntraServerBufferedChunks);
       var creditTimeout = TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds);
 
       var creditConsumer = await js.CreateOrUpdateConsumerAsync(IntraServerStreamName, new ConsumerConfig(CreditConsumerNameFor(subject))
@@ -373,7 +320,6 @@ namespace MiddleMan.Communication.Channels
 
     private async Task EnsureJetStreamAsync(CancellationToken cancellationToken = default)
     {
-      await EnsureConnectedAsync(cancellationToken);
       if (_jetStreamReady) return;
 
       await _connectLock.WaitAsync(cancellationToken);
@@ -382,7 +328,7 @@ namespace MiddleMan.Communication.Channels
         if (_jetStreamReady) return;
 
         var js = _nats.CreateJetStreamContext();
-       
+
         await js.CreateOrUpdateStreamAsync(new StreamConfig(IntraServerStreamName, [IntraServerSubjectPrefix + ".>"])
         {
           Retention = StreamConfigRetention.Workqueue,
@@ -409,25 +355,6 @@ namespace MiddleMan.Communication.Channels
 
     public async ValueTask DisposeAsync()
     {
-      List<CancellationTokenSource> allCts;
-      List<Task> allTasks;
-
-      lock (_subscriptionsLock)
-      {
-        allCts = _subscriptions.Values.SelectMany(v => v).ToList();
-        allTasks = _subscriptionTasks.Values.SelectMany(v => v).ToList();
-        _subscriptions.Clear();
-        _subscriptionTasks.Clear();
-      }
-
-      foreach (var cts in allCts)
-      {
-        cts.Cancel();
-        cts.Dispose();
-      }
-
-      try { await Task.WhenAll(allTasks); } catch { }
-
       await _nats.DisposeAsync();
       _connectLock.Dispose();
     }
