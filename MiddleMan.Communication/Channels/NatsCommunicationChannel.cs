@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using System.Text.Json;
+using System.Text;
 using MiddleMan.Core;
 using Microsoft.Extensions.Logging;
 using NATS.Client.Core;
@@ -35,7 +35,7 @@ namespace MiddleMan.Communication.Channels
     }
 
     #region REQUEST / REPLY
-     private static readonly NatsSubOpts _requestSubscriptionOpts = new()
+    private static readonly NatsSubOpts _requestSubscriptionOpts = new()
     {
       ThrowIfNoResponders = false,
     };
@@ -132,148 +132,62 @@ namespace MiddleMan.Communication.Channels
 
     #endregion
 
-    #region STREAMS (JetStream, backpressure hidden inside the channel)
-
+    #region STREAMS (JetStream as a bounded buffer)
     public async Task PublishToStreamAsync(string streamKey, IAsyncEnumerable<DataChunk> source, CancellationToken cancellationToken = default)
     {
       var subject = NormalizeSubject(streamKey);
-      var creditSubject = CreditSubjectFor(subject);
       await EnsureJetStreamAsync(cancellationToken);
-      var js = _nats.CreateJetStreamContext();
-      var creditTimeout = TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds);
 
-      var creditConsumer = await js.CreateOrUpdateConsumerAsync(IntraServerStreamName, new ConsumerConfig(CreditConsumerNameFor(subject))
-      {
-        FilterSubject = creditSubject,
-        AckPolicy = ConsumerConfigAckPolicy.Explicit,
-      }, cancellationToken);
+      var streamContext = _nats.CreateJetStreamContext();
+      var backpressureBudget = TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds);
+      var retryDelay = TimeSpan.FromMilliseconds(50);
 
+      long seq = 0;
       try
       {
-        // Initial credit published by the reader; JetStream retains it so start order doesn't matter.
-        var permits = await TakeCreditAsync(creditConsumer, creditTimeout, streamKey, cancellationToken);
-
         await foreach (var chunk in source.WithCancellation(cancellationToken))
         {
-          while (permits <= 0)
+          if (chunk is null || chunk.Length <= 0)
           {
-            permits += await TakeCreditAsync(creditConsumer, creditTimeout, streamKey, cancellationToken);
+            continue;
           }
 
-          permits--;
-          var payload = chunk.Data.AsSpan(0, chunk.Length).ToArray();
-          await js.PublishAsync(subject, JsonSerializer.SerializeToUtf8Bytes(StreamEnvelope.Data(payload, chunk.Length)), cancellationToken: cancellationToken);
+          var payload = chunk.Data.AsMemory(0, chunk.Length);
+          await PublishWithBackpressureAsync(streamContext, subject, payload, StreamHeaders.Data(seq), backpressureBudget, retryDelay, streamKey, cancellationToken);
+          seq++;
         }
 
-        // Terminal markers bypass credit: the reader needs End to finish, and a failed
-        // writer must still deliver Error even when no credit is available.
-        await js.PublishAsync(subject, JsonSerializer.SerializeToUtf8Bytes(StreamEnvelope.End()), cancellationToken: cancellationToken);
+        // The terminal marker also flows through backpressure: the buffer may be full.
+        await PublishWithBackpressureAsync(streamContext, subject, Array.Empty<byte>(), StreamHeaders.End(seq), backpressureBudget, retryDelay, streamKey, cancellationToken);
       }
       catch (Exception ex)
       {
-        // Best-effort terminal error marker so a waiting reader surfaces the failure.
-        try { await js.PublishAsync(subject, JsonSerializer.SerializeToUtf8Bytes(StreamEnvelope.FromError(ex.Message)), cancellationToken: CancellationToken.None); }
-        catch { }
+        await TryPublishAbortAsync(streamContext, subject, streamKey, ex.Message, backpressureBudget, retryDelay);
         throw;
-      }
-      finally
-      {
-        try { await js.DeleteConsumerAsync(IntraServerStreamName, CreditConsumerNameFor(subject), CancellationToken.None); }
-        catch { }
       }
     }
 
     public async IAsyncEnumerable<DataChunk> ConsumeStreamAsync(string streamKey, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
       var subject = NormalizeSubject(streamKey);
-      var creditSubject = CreditSubjectFor(subject);
-      await EnsureJetStreamAsync(cancellationToken);
-      var js = _nats.CreateJetStreamContext();
-      var consumerName = ConsumerNameFor(subject);
-      var bufferedChunks = Math.Max(1, ServerCapabilities.IntraServerBufferedChunks);
-
-      var consumer = await js.CreateOrUpdateConsumerAsync(IntraServerStreamName, new ConsumerConfig(consumerName)
-      {
-        FilterSubject = subject,
-        AckPolicy = ConsumerConfigAckPolicy.Explicit,
-        MaxAckPending = bufferedChunks,
-        AckWait = TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds),
-      }, cancellationToken);
-
-      // Initial credit: writer cannot publish data until the reader is ready.
-      // Stored in JetStream, so a writer that started first still observes it.
-      await js.PublishAsync(creditSubject, JsonSerializer.SerializeToUtf8Bytes(new CreditEnvelope { Count = bufferedChunks }), cancellationToken: cancellationToken);
-
-      var fetchOpts = new NatsJSFetchOpts
-      {
-        MaxMsgs = bufferedChunks,
-        Expires = TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds),
-      };
+      var session = await CreateStreamConsumerAsync(streamKey, subject, cancellationToken);
 
       try
       {
-        while (!cancellationToken.IsCancellationRequested)
+        await foreach (var chunk in PumpOrderedChunksAsync(session, cancellationToken))
         {
-          var completedBatch = true;
-
-          await foreach (var msg in consumer.FetchAsync<byte[]>(fetchOpts, cancellationToken: cancellationToken))
-          {
-            completedBatch = false;
-
-            StreamEnvelope? envelope = null;
-            try { envelope = JsonSerializer.Deserialize<StreamEnvelope>(msg.Data); }
-            catch { }
-            if (envelope == null)
-            {
-              await msg.AckAsync(cancellationToken: cancellationToken);
-              continue;
-            }
-
-            if (envelope.Kind == StreamEnvelope.EndKind)
-            {
-              await msg.AckAsync(cancellationToken: cancellationToken);
-              yield break;
-            }
-
-            if (envelope.Kind == StreamEnvelope.ErrorKind)
-            {
-              await msg.AckAsync(cancellationToken: cancellationToken);
-              throw new InvalidOperationException(envelope.Error ?? $"Remote stream '{streamKey}' failed.");
-            }
-
-            if (envelope.Kind != StreamEnvelope.DataKind || envelope.Payload == null)
-            {
-              await msg.AckAsync(cancellationToken: cancellationToken);
-              continue;
-            }
-
-            // Ack before yielding, then hand one credit back so the writer can
-            // publish the next chunk. This keeps at most `bufferedChunks`
-            // data messages outstanding, hiding backpressure from callers.
-            await msg.AckAsync(cancellationToken: cancellationToken);
-            await js.PublishAsync(creditSubject, JsonSerializer.SerializeToUtf8Bytes(new CreditEnvelope { Count = 1 }), cancellationToken: cancellationToken);
-            yield return new DataChunk(envelope.Payload, envelope.Length);
-          }
-
-          if (completedBatch)
-          {
-            // Fetch expired without messages: writer may not have published yet.
-            // Yield control briefly before polling again.
-            await Task.Delay(50, cancellationToken);
-          }
+          yield return chunk;
         }
       }
       finally
       {
-        try { await js.DeleteConsumerAsync(IntraServerStreamName, consumerName, CancellationToken.None); }
-        catch { }
+        await CleanupStreamConsumerAsync(session.Context, session.Subject, session.ConsumerName);
       }
     }
 
     public async Task DeleteStreamAsync(string streamKey)
     {
       var subject = NormalizeSubject(streamKey);
-      var creditSubject = CreditSubjectFor(subject);
 
       try
       {
@@ -284,38 +198,308 @@ namespace MiddleMan.Communication.Channels
         return;
       }
 
-      var js = _nats.CreateJetStreamContext();
+      var streamContext = _nats.CreateJetStreamContext();
 
-      try { await js.DeleteConsumerAsync(IntraServerStreamName, ConsumerNameFor(subject), CancellationToken.None); }
+      try { await streamContext.DeleteConsumerAsync(IntraServerStreamName, ConsumerNameFor(subject), CancellationToken.None); }
       catch { }
 
-      try { await js.DeleteConsumerAsync(IntraServerStreamName, CreditConsumerNameFor(subject), CancellationToken.None); }
-      catch { }
+      await TryPurgeStreamAsync(streamContext, subject, IntraServerStreamName);
+    }
 
-      try { await js.PurgeStreamAsync(IntraServerStreamName, new StreamPurgeRequest { Filter = subject }, CancellationToken.None); }
-      catch { }
+    private async Task<StreamConsumeSession> CreateStreamConsumerAsync(string streamKey, string subject, CancellationToken cancellationToken)
+    {
+      await EnsureJetStreamAsync(cancellationToken);
 
-      try { await js.PurgeStreamAsync(IntraServerStreamName, new StreamPurgeRequest { Filter = creditSubject }, CancellationToken.None); }
+      var streamContext = _nats.CreateJetStreamContext();
+      var consumerName = ConsumerNameFor(subject);
+      var maxInFlight = Math.Max(1, ServerCapabilities.IntraServerBufferedChunks) + 1;
+      var globalTimeout = TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds);
+      var idleTimeout = TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds * 2);
+
+      var consumer = await streamContext.CreateOrUpdateConsumerAsync(IntraServerStreamName, new ConsumerConfig(consumerName)
+      {
+        FilterSubject = subject,
+        AckPolicy = ConsumerConfigAckPolicy.Explicit,
+        MaxAckPending = maxInFlight,
+        AckWait = globalTimeout,
+        InactiveThreshold = globalTimeout,
+      }, cancellationToken);
+
+      var fetchOpts = new NatsJSFetchOpts
+      {
+        MaxMsgs = maxInFlight,
+        Expires = globalTimeout,
+      };
+
+      return new StreamConsumeSession(streamKey, subject, streamContext, consumer, consumerName, fetchOpts, idleTimeout);
+    }
+
+    private async IAsyncEnumerable<DataChunk> PumpOrderedChunksAsync(StreamConsumeSession session, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+      while (!session.Finished)
+      {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var gotMessage = false;
+
+        await foreach (var msg in session.Consumer.FetchAsync(
+          session.FetchOpts, NatsDefaultSerializer<byte[]>.Default, cancellationToken: cancellationToken))
+        {
+          gotMessage = true;
+          session.MarkProgress();
+
+          var outcome = await ClassifyStreamMessageAsync(msg, session, cancellationToken);
+          if (outcome.Disposition == StreamMessageDisposition.EndOfStream)
+          {
+            break;
+          }
+
+          if (outcome.Disposition == StreamMessageDisposition.Skipped)
+          {
+            continue;
+          }
+
+          yield return new DataChunk(outcome.Payload!);
+          await AcknowledgeYieldedChunkAsync(msg, session, cancellationToken);
+        }
+
+        if (session.Finished)
+        {
+          yield break;
+        }
+
+        if (!gotMessage)
+        {
+          await WaitOrThrowOnStreamIdleAsync(session, cancellationToken);
+        }
+      }
+    }
+
+    private async Task<StreamMessageOutcome> ClassifyStreamMessageAsync(INatsJSMsg<byte[]> msg, StreamConsumeSession session, CancellationToken cancellationToken)
+    {
+      var headers = ExtractStreamHeaders(msg);
+      if (!StreamHeaders.TryParse(headers, out var parsed))
+      {
+        await msg.AckAsync(cancellationToken: cancellationToken);
+        throw new InvalidOperationException(
+          $"Stream '{session.StreamKey}' received a message without valid stream headers.");
+      }
+
+      var payload = msg.Data;
+
+      if (parsed.Kind == StreamHeaders.ErrorKind)
+      {
+        await msg.AckAsync(cancellationToken: cancellationToken);
+        var reason = payload == null ? "" : Encoding.UTF8.GetString(payload);
+        throw new InvalidOperationException(string.IsNullOrEmpty(reason) ? $"Remote stream '{session.StreamKey}' failed." : reason);
+      }
+
+      if (parsed.Kind == StreamHeaders.EndKind)
+      {
+        await CompleteStreamOnEndMarkerAsync(msg, session, parsed, cancellationToken);
+        return StreamMessageOutcome.Ended;
+      }
+
+      if (parsed.Kind != StreamHeaders.DataKind)
+      {
+        await DiscardUnknownStreamKindAsync(msg, cancellationToken);
+        return StreamMessageOutcome.Skipped;
+      }
+
+      if (await DiscardStaleRedeliveryAsync(msg, session, parsed, cancellationToken))
+      {
+        return StreamMessageOutcome.Skipped;
+      }
+
+      ThrowOnSequenceGap(session, parsed);
+
+      if (await DiscardEmptyPayloadAsync(msg, session, cancellationToken))
+      {
+        return StreamMessageOutcome.Skipped;
+      }
+
+      return StreamMessageOutcome.Data(payload);
+    }
+
+    private static NatsHeaders? ExtractStreamHeaders(INatsJSMsg<byte[]> msg)
+    {
+      // Headers live on the concrete message type, not the interface.
+      return msg is NatsJSMsg<byte[]> concrete ? concrete.Headers : null;
+    }
+
+    private async Task CompleteStreamOnEndMarkerAsync(INatsJSMsg<byte[]> msg, StreamConsumeSession session, StreamHeaders.Parsed parsed, CancellationToken cancellationToken)
+    {
+      await msg.AckAsync(cancellationToken: cancellationToken);
+      if (parsed.FinalSeq != session.Expected)
+      {
+        throw new InvalidOperationException(
+          $"Stream '{session.StreamKey}' is incomplete: received {session.Expected} of {parsed.FinalSeq} chunks.");
+      }
+      session.Complete();
+    }
+
+    private static async Task DiscardUnknownStreamKindAsync(INatsJSMsg<byte[]> msg, CancellationToken cancellationToken)
+    {
+      await msg.AckAsync(cancellationToken: cancellationToken);
+    }
+
+    private static async Task<bool> DiscardStaleRedeliveryAsync(INatsJSMsg<byte[]> msg, StreamConsumeSession session, StreamHeaders.Parsed parsed, CancellationToken cancellationToken)
+    {
+      if (parsed.Seq >= session.Expected)
+      {
+        return false;
+      }
+
+      // At-least-once redelivery (AckWait fired while downstream was slow):
+      // already yielded, just ack and skip.
+      await msg.AckAsync(cancellationToken: cancellationToken);
+      return true;
+    }
+
+    private static void ThrowOnSequenceGap(StreamConsumeSession session, StreamHeaders.Parsed parsed)
+    {
+      if (parsed.Seq > session.Expected)
+      {
+        throw new InvalidOperationException(
+          $"Stream '{session.StreamKey}' lost data: expected chunk {session.Expected} but got {parsed.Seq}.");
+      }
+    }
+
+    private static async Task<bool> DiscardEmptyPayloadAsync(INatsJSMsg<byte[]> msg, StreamConsumeSession session, CancellationToken cancellationToken)
+    {
+      var payload = msg.Data;
+      if (payload != null && payload.Length != 0)
+      {
+        return false;
+      }
+
+      await msg.AckAsync(cancellationToken: cancellationToken);
+      session.Advance();
+      return true;
+    }
+
+    private static async Task AcknowledgeYieldedChunkAsync(INatsJSMsg<byte[]> msg, StreamConsumeSession session, CancellationToken cancellationToken)
+    {
+      await msg.AckAsync(cancellationToken: cancellationToken);
+      session.Advance();
+    }
+
+    private static async Task WaitOrThrowOnStreamIdleAsync(StreamConsumeSession session, CancellationToken cancellationToken)
+    {
+      if (DateTime.UtcNow - session.LastProgress >= session.IdleTimeout)
+      {
+        throw new TimeoutException(
+          $"Timed out waiting for stream '{session.StreamKey}' after {session.Expected} chunks. The writer stalled or crashed.");
+      }
+      await Task.Delay(50, cancellationToken);
+    }
+
+    private async Task CleanupStreamConsumerAsync(INatsJSContext streamContext, string subject, string consumerName)
+    {
+      await TryPurgeStreamAsync(streamContext, subject, IntraServerStreamName);
+
+      try { await streamContext.DeleteConsumerAsync(IntraServerStreamName, consumerName, CancellationToken.None); }
       catch { }
     }
 
-    private static async Task<int> TakeCreditAsync(INatsJSConsumer creditConsumer, TimeSpan timeout, string streamKey, CancellationToken cancellationToken)
+    private async Task PublishWithBackpressureAsync(
+      INatsJSContext streamContext,
+      string subject,
+      ReadOnlyMemory<byte> payload,
+      NatsHeaders headers,
+      TimeSpan budget,
+      TimeSpan retryDelay,
+      string streamKey,
+      CancellationToken cancellationToken)
     {
-      await foreach (var msg in creditConsumer.FetchAsync<byte[]>(new NatsJSFetchOpts { MaxMsgs = 1, Expires = timeout }, cancellationToken: cancellationToken))
+      var deadline = DateTime.UtcNow + budget;
+      var loggedWait = false;
+      var attempt = 0;
+      var maxDelay = TimeSpan.FromMilliseconds(500);
+
+      while (true)
       {
-        CreditEnvelope? credit = null;
-        try { credit = JsonSerializer.Deserialize<CreditEnvelope>(msg.Data); }
-        catch { }
+        cancellationToken.ThrowIfCancellationRequested();
 
-        await msg.AckAsync(cancellationToken: cancellationToken);
-
-        if (credit is { Count: > 0 })
+        try
         {
-          return credit.Count;
+          var ack = await streamContext.PublishAsync(subject, payload, NatsDefaultSerializer<ReadOnlyMemory<byte>>.Default, headers: headers, cancellationToken: cancellationToken);
+          ack.EnsureSuccess();
+          return;
+        }
+        catch (OperationCanceledException)
+        {
+          throw;
+        }
+        catch (Exception ex) when (IsBackpressureRejection(ex))
+        {
+          if (DateTime.UtcNow >= deadline)
+          {
+            throw new TimeoutException(
+              $"Timed out publishing to stream '{streamKey}': buffer full " +
+              $"({ServerCapabilities.IntraServerBufferedChunks} chunks in flight). " +
+              "The reader is too slow or not consuming.");
+          }
+
+          if (!loggedWait)
+          {
+            _logger?.LogDebug("Backpressure on stream '{StreamKey}', waiting for buffer space", streamKey);
+            loggedWait = true;
+          }
+
+          await Task.Delay(ComputeBackpressureDelay(retryDelay, maxDelay, attempt++), cancellationToken);
+        }
+      }
+    }
+
+    private async Task TryPublishAbortAsync(
+      INatsJSContext streamContext,
+      string subject,
+      string streamKey,
+      string reason,
+      TimeSpan budget,
+      TimeSpan retryDelay)
+    {
+      await TryPurgeStreamAsync(streamContext, subject, streamKey);
+
+      try
+      {
+        var abort = Encoding.UTF8.GetBytes(reason);
+        await PublishWithBackpressureAsync(streamContext, subject, abort, StreamHeaders.Error(), budget, retryDelay, streamKey, CancellationToken.None);
+      }
+      catch (Exception ex)
+      {
+        _logger?.LogWarning(ex, "Failed to publish abort marker for stream '{StreamKey}'", streamKey);
+      }
+    }
+
+    private async Task TryPurgeStreamAsync(INatsJSContext streamContext, string subject, string streamKey)
+    {
+      try { await streamContext.PurgeStreamAsync(streamKey, new StreamPurgeRequest { Filter = subject }, CancellationToken.None); }
+      catch (Exception ex) { _logger?.LogWarning(ex, "Failed to purge stream '{StreamKey}'", streamKey); }
+    }
+
+    private static bool IsBackpressureRejection(Exception ex)
+    {
+      for (var current = ex; current != null; current = current.InnerException)
+      {
+        if (current is NatsJSApiException apiEx && apiEx.Error != null)
+        {
+          return apiEx.Error.Description?.Contains("maximum messages", StringComparison.OrdinalIgnoreCase) == true;
         }
       }
 
-      throw new TimeoutException($"Timed out waiting for stream credit on '{streamKey}'. The reader is not consuming.");
+      // Fallback for untyped/wrapped variants across server versions.
+      return ex.Message.Contains("maximum messages", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static TimeSpan ComputeBackpressureDelay(TimeSpan initial, TimeSpan max, int attempt)
+    {
+      var grownMs = initial.TotalMilliseconds * (1 << Math.Min(attempt, 5));
+      var cappedMs = Math.Min(grownMs, max.TotalMilliseconds);
+      // +/-20% jitter to avoid lockstep retries from concurrent producers.
+      var jitterMs = cappedMs * 0.2 * (Random.Shared.NextDouble() * 2 - 1);
+      return TimeSpan.FromMilliseconds(Math.Max(1, cappedMs + jitterMs));
     }
 
     private async Task EnsureJetStreamAsync(CancellationToken cancellationToken = default)
@@ -327,14 +511,21 @@ namespace MiddleMan.Communication.Channels
       {
         if (_jetStreamReady) return;
 
-        var js = _nats.CreateJetStreamContext();
+        var streamContext = _nats.CreateJetStreamContext();
 
-        await js.CreateOrUpdateStreamAsync(new StreamConfig(IntraServerStreamName, [IntraServerSubjectPrefix + ".>"])
+        var maxPerSubject = Math.Max(1, ServerCapabilities.IntraServerBufferedChunks) + 1;
+
+        await streamContext.CreateOrUpdateStreamAsync(new StreamConfig(IntraServerStreamName, [IntraServerSubjectPrefix + ".>"])
         {
           Retention = StreamConfigRetention.Workqueue,
           Storage = StreamConfigStorage.Memory,
           AllowDirect = true,
+          MaxMsgsPerSubject = maxPerSubject,
+          Discard = StreamConfigDiscard.New,
+          DiscardNewPerSubject = true,
+          MaxAge = TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds * 4),
         }, cancellationToken);
+
         _jetStreamReady = true;
       }
       finally
@@ -346,10 +537,6 @@ namespace MiddleMan.Communication.Channels
     private static string NormalizeSubject(string streamKey) => streamKey.Replace(':', '.').Replace(' ', '_');
 
     private static string ConsumerNameFor(string subject) => subject.Replace('.', '-').Replace(':', '-');
-
-    private static string CreditSubjectFor(string subject) => subject + ".credit";
-
-    private static string CreditConsumerNameFor(string subject) => CreditSubjectFor(subject).Replace('.', '-').Replace(':', '-');
 
     #endregion
 

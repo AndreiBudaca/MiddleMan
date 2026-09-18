@@ -18,7 +18,7 @@ namespace MiddleMan.Service.WebSocketClientMethods
     {
       var client = await _clientRepository.GetByIdAsync((identifier, name)) ?? throw new InvalidOperationException($"Client {identifier}:{name} not found.");
 
-      var enumerationResult = await methodChunks.EnumerateUntil(35, 0, cancellationToken);
+      var enumerationResult = await methodChunks.EnumerateUntil(35, cancellationToken);
 
       var metadata = GetMetadata(enumerationResult.Received);
       if (!ServerCapabilities.AllowedVersions.Contains(metadata.Version)) throw new NotSupportedException($"Version {metadata.Version} is not supported.");

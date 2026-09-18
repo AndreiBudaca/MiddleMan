@@ -18,13 +18,13 @@ namespace MiddleMan.Web.Communication.Source
 
     private static async IAsyncEnumerable<DataChunk> Adapt(HttpRequest request)
     {
-      var bytesRead = int.MaxValue;
-
-      while (bytesRead > 0)
+      while (true)
       {
         // TO DO: Consider using a buffer pool to reduce memory allocations for large requests
         var buffer = new byte[ServerCapabilities.MaxChunkSize];
-        bytesRead = await request.Body.ReadAsync(buffer.AsMemory(0, ServerCapabilities.MaxChunkSize));
+        var bytesRead = await request.Body.ReadAsync(buffer.AsMemory(0, ServerCapabilities.MaxChunkSize));
+
+        if (bytesRead == 0) break;
 
         if (bytesRead == buffer.Length)
         {

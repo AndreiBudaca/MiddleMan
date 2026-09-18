@@ -4,7 +4,7 @@ namespace MiddleMan.Core.Extensions
 {
   public static class AsyncEnumerableExtensions
   {
-    public static async Task<AsyncEnumResult> EnumerateUntil(this IAsyncEnumerable<DataChunk> data, int bytesToReceive, int offset, CancellationToken cancellationToken)
+    public static async Task<AsyncEnumResult> EnumerateUntil(this IAsyncEnumerable<DataChunk> data, int bytesToReceive, CancellationToken cancellationToken)
     {
       var received = new DataChunk(new byte[bytesToReceive], 0);
       var totalBytesReceived = 0;
@@ -20,18 +20,10 @@ namespace MiddleMan.Core.Extensions
           var item = enumerator.Current;
 
           // Nothing to read from this item, continue to read
-          if (item == null) continue;
-
-          // Still haven't reached the offset, continue to read
-          if (totalBytesReceived + item.Length <= offset)
-          {
-            totalBytesReceived += item.Length;
-            continue;
-          }
+          if (item == null || item.Length == 0) continue;
 
           // Calculate how many bytes we can copy from this item
-          var copyFromIndex = totalBytesReceived > offset ? 0 : offset - totalBytesReceived;
-          var bytesToCopy = Math.Min(item.Length - copyFromIndex, bytesToReceive - totalBytesReceived + offset);
+          var bytesToCopy = Math.Min(item.Length, bytesToReceive - bytesCopied);
 
           received.Append(item.Data, bytesToCopy);
 
@@ -42,9 +34,8 @@ namespace MiddleMan.Core.Extensions
           // Check if we've received enough bytes
           if (bytesCopied >= bytesToReceive)
           {
-            var remainingIndex = copyFromIndex + bytesToCopy;
-            var remaining = new DataChunk(item.Length - remainingIndex);
-            Array.Copy(item.Data, remainingIndex, remaining.Data, 0, remaining.Length);
+            var remaining = new DataChunk(item.Length - bytesToCopy);
+            Array.Copy(item.Data, bytesToCopy, remaining.Data, 0, remaining.Length);
 
             enumeratorTransferred = true;
             return new AsyncEnumResult
@@ -63,7 +54,7 @@ namespace MiddleMan.Core.Extensions
         }
       }
 
-      throw new InvalidDataException($"Invalid content lenght. Expected to read {bytesToReceive} from {offset}, but only got {totalBytesReceived}.");
+      throw new InvalidDataException($"Invalid content length. Expected {bytesToReceive} bytes, but only got {totalBytesReceived}.");
     }
 
     public static async IAsyncEnumerable<T> PrependItems<T>(this IAsyncEnumerator<T> enumerator, T item)

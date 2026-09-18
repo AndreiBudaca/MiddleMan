@@ -24,14 +24,14 @@ namespace MiddleMan.Core.DataChunkConverters
       CancellationToken cancellationToken = default
     ) where T : class
     {
-      var lengthResult = await dataStream.EnumerateUntil(4, 0, cancellationToken);
+      var lengthResult = await dataStream.EnumerateUntil(4, cancellationToken);
       dataStream = lengthResult.Next;
 
       var length = BitConverter.ToInt32(lengthResult.Received.Data);
 
       if (length == 0) return (null, dataStream);
 
-      var metadataResult = await dataStream.EnumerateUntil(length, 0, cancellationToken);
+      var metadataResult = await dataStream.EnumerateUntil(length, cancellationToken);
       dataStream = metadataResult.Next;
 
       var metadata = System.Text.Json.JsonSerializer.Deserialize<T>(metadataResult.Received.Data);
