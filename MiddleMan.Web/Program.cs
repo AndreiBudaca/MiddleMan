@@ -75,6 +75,8 @@ namespace MiddleMan.Web
               CookieAuthenticationDefaults.AuthenticationScheme)
             .RequireAuthenticatedUser()
             .Build());
+      
+      builder.Logging.SetMinimumLevel(LogLevel.Trace);
 
       var app = builder.Build();
 

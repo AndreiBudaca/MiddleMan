@@ -1,6 +1,6 @@
 using MiddleMan.Core.Extensions;
 
-namespace MiddleMan.Core.DataChunkConverters
+namespace MiddleMan.Core.Conversions
 {
   public static class LenghtPrefixConverter
   {

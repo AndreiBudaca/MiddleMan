@@ -10,7 +10,6 @@ using MiddleMan.Communication;
 using MiddleMan.Communication.Channels;
 using MiddleMan.Service.Blobs.OracleObjectStorage;
 using MiddleMan.Web.Communication.Resolver;
-using Microsoft.Extensions.Logging;
 
 namespace MiddleMan.Web.Infrastructure.Configuration
 {

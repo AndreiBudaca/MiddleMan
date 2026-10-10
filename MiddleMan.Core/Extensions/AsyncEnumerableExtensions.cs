@@ -34,10 +34,24 @@ namespace MiddleMan.Core.Extensions
           // Check if we've received enough bytes
           if (bytesCopied >= bytesToReceive)
           {
+            // No remaining data in this item, just return the enumerator as is
+            if (bytesToCopy == item.Length)
+            {
+              enumeratorTransferred = true;
+
+              return new AsyncEnumResult
+              {
+                Received = received,
+                Next = DrainEnumerator(enumerator)
+              };
+            }
+
+            // Remaining data in this item, create a new DataChunk for the remaining data and return it with the enumerator
             var remaining = new DataChunk(item.Length - bytesToCopy);
             Array.Copy(item.Data, bytesToCopy, remaining.Data, 0, remaining.Length);
 
             enumeratorTransferred = true;
+
             return new AsyncEnumResult
             {
               Received = received,
@@ -57,13 +71,27 @@ namespace MiddleMan.Core.Extensions
       throw new InvalidDataException($"Invalid content length. Expected {bytesToReceive} bytes, but only got {totalBytesReceived}.");
     }
 
-    public static async IAsyncEnumerable<T> PrependItems<T>(this IAsyncEnumerator<T> enumerator, T item)
+    public static async IAsyncEnumerable<T> PrependItems<T>(this IAsyncEnumerator<T> enumerator, T? item)
     {
       try
       {
-        if (item != null)
-          yield return item;
+        if (item != null) yield return item;
 
+        while (await enumerator.MoveNextAsync())
+        {
+          yield return enumerator.Current;
+        }
+      }
+      finally
+      {
+        await enumerator.DisposeAsync();
+      }
+    }
+
+    private static async IAsyncEnumerable<T> DrainEnumerator<T>(IAsyncEnumerator<T> enumerator)
+    {
+      try
+      {
         while (await enumerator.MoveNextAsync())
         {
           yield return enumerator.Current;

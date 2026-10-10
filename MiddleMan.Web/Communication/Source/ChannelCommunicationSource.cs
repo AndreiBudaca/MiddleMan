@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using MiddleMan.Communication;
 using MiddleMan.Core;
-using MiddleMan.Core.DataChunkConverters;
+using MiddleMan.Core.Conversions;
 using MiddleMan.Web.Communication.Metadata;
 
 namespace MiddleMan.Web.Communication.Source

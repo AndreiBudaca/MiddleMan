@@ -1,6 +1,6 @@
 using MiddleMan.Communication;
 using MiddleMan.Core;
-using MiddleMan.Core.DataChunkConverters;
+using MiddleMan.Core.Conversions;
 using MiddleMan.Core.Extensions;
 using MiddleMan.Core.Extensions.Classes.AsyncEnumerable;
 

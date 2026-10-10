@@ -23,7 +23,7 @@ namespace MiddleMan.Web.Communication.Target
       this.clientProxy = clientProxy;
       this.method = method;
     }
-    
+
     public SameServerWebSocketStreamingInvocationTarget(Guid correlation, CommunicationControl control)
     {
       this.correlation = correlation;
@@ -37,7 +37,7 @@ namespace MiddleMan.Web.Communication.Target
     {
       var communicationCorrelation = correlation ?? Guid.NewGuid();
       var communicationControl = control ?? CommunicationSessionRegistry.RegisterSession(communicationCorrelation);
-      
+
       try
       {
         // Send the correlation ID and metadata to the client to initiate the streaming session
@@ -47,13 +47,13 @@ namespace MiddleMan.Web.Communication.Target
         }
 
         // Wait for the client to subscribe to the server channel
+        ChannelWriter<DataChunk>? channelWriter;
         using (var timeoutDisposable = communicationControl.ChannelWriterSource.SetTimeout(cancellationToken: cancellationToken))
         {
-          var channelWriter = await communicationControl.ChannelWriterSource.Task
+          channelWriter = await communicationControl.ChannelWriterSource.Task
             ?? throw new InvalidOperationException("ChannelWriter is null.");
-
-          await WriteDataToChannel(channelWriter, communicationControl.WriterCompletionSource, data, cancellationToken);
         }
+        await WriteDataToChannel(channelWriter, communicationControl.WriterCompletionSource, data, cancellationToken);
 
         // Wait for the client to register its channel
         ChannelReader<DataChunk>? channelReader;
@@ -97,6 +97,7 @@ namespace MiddleMan.Web.Communication.Target
       {
         await foreach (var chunk in data.Data.WithCancellation(cancellationToken))
         {
+          if (chunk is null || chunk.Length == 0) continue;
           await channelWriter.WriteAsync(chunk, cancellationToken);
         }
       }

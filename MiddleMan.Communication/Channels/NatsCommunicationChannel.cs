@@ -222,7 +222,7 @@ namespace MiddleMan.Communication.Channels
         AckPolicy = ConsumerConfigAckPolicy.Explicit,
         MaxAckPending = maxInFlight,
         AckWait = globalTimeout,
-        InactiveThreshold = globalTimeout,
+        InactiveThreshold = TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds * 4),
       }, cancellationToken);
 
       var fetchOpts = new NatsJSFetchOpts
@@ -259,8 +259,10 @@ namespace MiddleMan.Communication.Channels
             continue;
           }
 
+          await msg.AckAsync(cancellationToken: cancellationToken);
+          session.Advance();
+          
           yield return new DataChunk(outcome.Payload!);
-          await AcknowledgeYieldedChunkAsync(msg, session, cancellationToken);
         }
 
         if (session.Finished)
@@ -378,12 +380,6 @@ namespace MiddleMan.Communication.Channels
       return true;
     }
 
-    private static async Task AcknowledgeYieldedChunkAsync(INatsJSMsg<byte[]> msg, StreamConsumeSession session, CancellationToken cancellationToken)
-    {
-      await msg.AckAsync(cancellationToken: cancellationToken);
-      session.Advance();
-    }
-
     private static async Task WaitOrThrowOnStreamIdleAsync(StreamConsumeSession session, CancellationToken cancellationToken)
     {
       if (DateTime.UtcNow - session.LastProgress >= session.IdleTimeout)
@@ -396,10 +392,13 @@ namespace MiddleMan.Communication.Channels
 
     private async Task CleanupStreamConsumerAsync(INatsJSContext streamContext, string subject, string consumerName)
     {
-      await TryPurgeStreamAsync(streamContext, subject, IntraServerStreamName);
-
+      // Delete the consumer first so no further delivery/redelivery happens,
+      // then purge leftovers. Purging first can delete un-acked messages
+      // (including End) that an in-flight Fetch still expects.
       try { await streamContext.DeleteConsumerAsync(IntraServerStreamName, consumerName, CancellationToken.None); }
-      catch { }
+      catch (Exception ex) { _logger?.LogDebug(ex, "Failed to delete consumer '{Consumer}'", consumerName); }
+
+      await TryPurgeStreamAsync(streamContext, subject, IntraServerStreamName);
     }
 
     private async Task PublishWithBackpressureAsync(
@@ -460,7 +459,7 @@ namespace MiddleMan.Communication.Channels
       TimeSpan budget,
       TimeSpan retryDelay)
     {
-      await TryPurgeStreamAsync(streamContext, subject, streamKey);
+      await TryPurgeStreamAsync(streamContext, subject, IntraServerStreamName);
 
       try
       {
@@ -518,7 +517,7 @@ namespace MiddleMan.Communication.Channels
         await streamContext.CreateOrUpdateStreamAsync(new StreamConfig(IntraServerStreamName, [IntraServerSubjectPrefix + ".>"])
         {
           Retention = StreamConfigRetention.Workqueue,
-          Storage = StreamConfigStorage.Memory,
+          Storage = StreamConfigStorage.Memory, // TO DO: consider disk if we want to survive a server crash / minimize memory pressure
           AllowDirect = true,
           MaxMsgsPerSubject = maxPerSubject,
           Discard = StreamConfigDiscard.New,

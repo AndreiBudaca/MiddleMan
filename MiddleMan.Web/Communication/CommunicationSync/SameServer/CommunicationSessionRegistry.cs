@@ -11,18 +11,18 @@ namespace MiddleMan.Web.Communication.CommunicationSync.SameServer
 
     public static CommunicationControl RegisterSession(Guid correlation)
     {
-      var control = new CommunicationControl
-      {
-        ChannelWriterSource = new TaskCompletionSource<ChannelWriter<DataChunk>>(),
-        WriterCompletionSource = new TaskCompletionSource(),
-        ChannelReaderSource = new TaskCompletionSource<ChannelReader<DataChunk>>(),
-        ReaderCompletionSource = new TaskCompletionSource(),
-        ResponseMetadataSource = new TaskCompletionSource<HttpResponseMetadata?>()
-      };
+      var control = CreateControl();
 
       sessions[correlation] = control;
 
       return control;
+    }
+
+    public static (CommunicationControl Control, bool Created) GetOrRegister(Guid correlation)
+    {
+      var fresh = CreateControl();
+      var actual = sessions.GetOrAdd(correlation, fresh);
+      return (actual, ReferenceEquals(actual, fresh));
     }
 
     public static CommunicationSession? GetSession(Guid correlation)
@@ -40,6 +40,15 @@ namespace MiddleMan.Web.Communication.CommunicationSync.SameServer
       // Cancel any pending tasks and complete the channel to signal the end of the session
       session?.TryCancelAll();
     }
+
+    private static CommunicationControl CreateControl() => new()
+    {
+      ChannelWriterSource = new TaskCompletionSource<ChannelWriter<DataChunk>>(),
+      WriterCompletionSource = new TaskCompletionSource(),
+      ChannelReaderSource = new TaskCompletionSource<ChannelReader<DataChunk>>(),
+      ReaderCompletionSource = new TaskCompletionSource(),
+      ResponseMetadataSource = new TaskCompletionSource<HttpResponseMetadata?>()
+    };
 
     private static CommunicationSession? ToSession(CommunicationControl? control)
     {

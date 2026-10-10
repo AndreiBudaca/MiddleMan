@@ -70,6 +70,8 @@ namespace MiddleMan.Web.Hubs
     {
       var (id, name, _, _, clientId) = GetClientInfoFromContext();
 
+      StreamingCommunicationTaskRegistry.AbortConnection(Context.ConnectionId, logger);
+
       if (string.IsNullOrWhiteSpace(clientId))
       {
         logger.LogWarning("Client disconnection without client identity header. Connection ID: {ConnectionId}", Context.ConnectionId);
@@ -147,13 +149,25 @@ namespace MiddleMan.Web.Hubs
       var (id, name, _, _, clientId) = GetClientInfoFromContext();
       await ConnectionChecks(id, name, clientId);
 
-      var session = CommunicationSessionRegistry.GetSession(correlation)
-        ?? throw new HubException("Communication session not found");
+      var session = CommunicationSessionRegistry.GetSession(correlation);
+      var tracked = StreamingCommunicationTaskRegistry.TryGet(correlation);
 
-      session.ResponseMetadataSource.TrySetResult(metadata);
-      session.ChannelReaderSource.TrySetResult(channelReader.AsDataChunkChannelReader());
+      if (session == null && tracked == null) throw new HubException("Communication session not found");
 
-      await session.ReaderCompletion;
+      if (session != null)
+      {
+        session.ResponseMetadataSource.TrySetResult(metadata);
+        session.ChannelReaderSource.TrySetResult(channelReader.AsDataChunkChannelReader());
+
+        await session.ReaderCompletion.WaitAsync(
+          TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds * 2),
+          Context.ConnectionAborted);
+      }
+
+      if (tracked != null)
+      {
+        await StreamingCommunicationTaskRegistry.ReleaseAfterUploadAsync(correlation, Context.ConnectionAborted);
+      }
     }
 
     public async IAsyncEnumerable<Memory<byte>> SubscribeToServer(Guid correlation)
@@ -161,42 +175,70 @@ namespace MiddleMan.Web.Hubs
       var (id, name, _, _, clientId) = GetClientInfoFromContext();
       await ConnectionChecks(id, name, clientId);
 
-      // Create channel
-      var channel = Channel.CreateBounded<DataChunk>(new BoundedChannelOptions(1));
-
-      // Try get exsiting session
-      var session = CommunicationSessionRegistry.GetSession(correlation);
-
-      // Mark session state and create new control if needed
-      var sessionWasMissing = session == null;
-      var control = sessionWasMissing ? CommunicationSessionRegistry.RegisterSession(correlation) : null;
-
-      // Resolve the writer TaskCompletionSource and register the writer
-      var channelWriterSource = session?.ChannelWriterSource ?? control?.ChannelWriterSource;
-      channelWriterSource?.TrySetResult(channel.Writer);
-
-      // If there was no session, the hub is responsible to control the communication.
-      // Since we need to return data to the client, we will handle the communication on a background Task
-      Task? multiServerCommunicationTask = null;
-      if (sessionWasMissing)
+      var handoffCapacity = ServerCapabilities.IntraServerBufferedChunks + 2; // +2 for the metadata and the end-of-stream marker
+      var channel = Channel.CreateBounded<DataChunk>(new BoundedChannelOptions(handoffCapacity)
       {
-        // TO DO: Use custom exceptions
-        multiServerCommunicationTask = Task.Run(() => InitiateStreamingCommunication(correlation,
-          control ?? throw new InvalidOperationException("Control can't be null when initializing client communication")));
+        SingleReader = true,
+        SingleWriter = true,
+      });
+
+      // Atomically get or create the session; Created tells whether this call owns the bridge task.
+      var (bridgeControl, created) = CommunicationSessionRegistry.GetOrRegister(correlation);
+
+      // Resolve the writer and register it for the inter-replica bridge.
+      bridgeControl.ChannelWriterSource.TrySetResult(channel.Writer);
+      var writerCompletionTask = bridgeControl.WriterCompletionSource.Task;
+
+      // If this call created the session, it owns the inter-replica bridge task,
+      // which runs on a different thread so download chunks stream promptly.
+      // NOTE: never await the full task in this iterator (not even in finally) -
+      // it outlives the stream and deadlocks (see registry). It is awaited in AddReadChannel.
+      StreamingCommunicationTaskRegistry.TrackedCommunication? tracked = null;
+      if (created)
+      {
+        // TO DO: Use custom exceptions.
+        tracked = StreamingCommunicationTaskRegistry.StartBridge(
+          correlation,
+          Context.ConnectionId,
+          Context.ConnectionAborted,
+          ct => InitiateStreamingCommunication(correlation, bridgeControl, ct),
+          logger);
       }
 
       // Consume the channel and yield the data to the client
       // TO DO: add a timeout for the channel reading to avoid hanging indefinitely if data isn't received
+      var downloadCompleted = false;
       try
       {
-        await foreach (var chunk in channel.Reader.ReadAllAsync())
+        await foreach (var chunk in channel.Reader.ReadAllAsync(Context.ConnectionAborted))
         {
+          if (chunk.Length == 0) continue;
           yield return chunk.Data.AsMemory(0, chunk.Length);
         }
+
+        // Phase-1 join only: wait for forwarded server data before EOS (not the upload).
+        if (tracked != null)
+        {
+          await StreamingCommunicationTaskRegistry.WaitForDownloadAsync(
+            tracked,
+            writerCompletionTask,
+            channel.Writer,
+            TimeSpan.FromSeconds(ServerCapabilities.GlobalTimeoutSeconds),
+            logger,
+            Context.ConnectionAborted);
+        }
+
+        downloadCompleted = true;
       }
       finally
       {
-        if (multiServerCommunicationTask != null) await multiServerCommunicationTask;
+        // On download abort/failure only: unblock the bridge task. On success,
+        // ownership transfers to AddReadChannel (or AbortConnection on disconnect).
+        if (!downloadCompleted && tracked != null)
+        {
+          channel.Writer.TryComplete(new OperationCanceledException("SubscribeToServer download did not complete."));
+          StreamingCommunicationTaskRegistry.AbortDownload(correlation, logger);
+        }
       }
     }
 
@@ -370,7 +412,7 @@ namespace MiddleMan.Web.Hubs
       return (id, name, email, clientToken, clientId);
     }
 
-    private async Task InitiateStreamingCommunication(Guid correlation, CommunicationControl control)
+    private async Task InitiateStreamingCommunication(Guid correlation, CommunicationControl control, CancellationToken cancellationToken = default)
     {
       var mediator = new SimpleMediator(
         logger,
@@ -385,8 +427,7 @@ namespace MiddleMan.Web.Hubs
         new TargetDescription()
       );
 
-      // TO DO: see if you can resolve a token
-      await mediator.Mediate(CancellationToken.None);
+      await mediator.Mediate(cancellationToken);
     }
 
     private static HttpRequestMetadata ProcessMetadata(DirectInvocationData requestData, HubCallerContext context)
