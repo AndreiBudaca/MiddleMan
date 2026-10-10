@@ -116,7 +116,7 @@ namespace MiddleMan.Core.Extensions
       await foreach (var chunk in data.WithCancellation(cancellationToken))
       {
         totalBytesRead += chunk.Length;
-        if (maxLength.HasValue && totalBytesRead >= maxLength.Value) break;
+        if (maxLength.HasValue && totalBytesRead > maxLength.Value) throw new InvalidDataException($"Data exceeds maximum length of {maxLength.Value} bytes.");
 
         await memoryStream.WriteAsync(chunk.Data.AsMemory(0, chunk.Length), cancellationToken);
       }

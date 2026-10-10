@@ -141,6 +141,12 @@ namespace MiddleMan.Web.Hubs
         MethodSignature = client?.Signature,
       };
     }
+
+    public string Ping(string message)
+    {
+      if (message != "Ping") throw new HubException("Invalid ping message");
+      return "Pong";
+    }
     #endregion
 
     #region [Communication methods]
@@ -375,12 +381,6 @@ namespace MiddleMan.Web.Hubs
 
     //   throw new HubException("Invocation failed after multiple attempts");
     // }
-
-    public string Ping(string message)
-    {
-      if (message != "Ping") throw new HubException("Invalid ping message");
-      return "Pong";
-    }
     #endregion
 
     // TO DO: Refactor this to a hub filter

@@ -16,9 +16,14 @@ namespace MiddleMan.Web.Communication.Mediator
     private readonly ICommunicationTargetResolver targetResolver = targetResolver;
     private readonly TargetDescription targetDescription = targetDescription;
 
-    public virtual async Task<bool> Mediate(CancellationToken cancellationToken = default)
+    public virtual Task<bool> Mediate(CancellationToken cancellationToken = default)
     {
-      var target = await targetResolver.ResolveTarget(targetDescription, cancellationToken);
+      return Mediate(context, cancellationToken);
+    }
+
+    protected async Task<bool> Mediate(CommunicationSourceContext context, CancellationToken cancellationToken)
+    {
+            var target = await targetResolver.ResolveTarget(targetDescription, cancellationToken);
       if (target == null) return false;
 
       LogInvocation();

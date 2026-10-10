@@ -24,7 +24,7 @@ namespace MiddleMan.Web.Controllers.WebSockets
     private readonly IWebSocketClientsService webSocketClientsService = webSocketClientsService;
     private readonly ICommunicationTargetResolver targetResolver = targetResolver;
 
-    [RequestSizeLimit(1_000_000_000)]
+    [RequestSizeLimit(10_000_000_000)]
     [Route("{userId}/{webSocketClientName}/{method}/{*rest}")]
     public async Task Send([FromRoute] string userId, [FromRoute] string webSocketClientName, [FromRoute] string method, CancellationToken cancellationToken)
     {

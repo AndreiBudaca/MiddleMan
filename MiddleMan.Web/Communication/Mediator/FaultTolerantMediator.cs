@@ -18,6 +18,11 @@ namespace MiddleMan.Web.Communication.Mediator
     public override async Task<bool> Mediate(CancellationToken cancellationToken = default)
     {
       await using var bufferedRequestSource = new BufferedCommunicationSource(context.Source);
+      var bufferedContext = new CommunicationSourceContext
+      {
+        Source = bufferedRequestSource,
+        Sink = context.Sink
+      };
 
       var retryCount = 1;
 
@@ -27,9 +32,9 @@ namespace MiddleMan.Web.Communication.Mediator
       {
         try
         {
-          communicationFailedCts.TryReset();
+          communicationFailedCts.TryReset();  
           LogRetry(retryCount);
-          return await base.Mediate(communicationFailedCts.Token);
+          return await Mediate(bufferedContext, communicationFailedCts.Token);
         }
         catch (Exception ex)
         {

@@ -16,7 +16,7 @@ namespace MiddleMan.Web.Communication.Target
       var payload = new DirectInvocationData
       {
         Metadata = data?.Metadata,
-        Data = data?.Data != null ? await data.Data.ReadAllBytes(maxLength: null, cancellationToken) : []
+        Data = data?.Data != null ? await data.Data.ReadAllBytes(maxLength: ServerCapabilities.MaxChunkSize, cancellationToken) : []
       };
 
       await clientProxy.SendAsync(method, payload, cancellationToken);
