@@ -20,7 +20,7 @@ namespace MiddleMan.Web.Communication.Metadata
 
     public HttpRequestMetadata(HttpRequest request, HttpUser? user = null)
     {
-      List<string> headersToOmit = ["Cookie"];
+      List<string> headersToOmit = ["Cookie", "Authorization", "Host", "Connection"];
 
       Method = request.Method;
 

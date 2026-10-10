@@ -29,7 +29,8 @@ namespace MiddleMan.Core.Conversions
 
       var length = BitConverter.ToInt32(lengthResult.Received.Data);
 
-      if (length == 0) return (null, dataStream);
+      if (length <= 0) return (null, dataStream);
+      if (length > ServerCapabilities.MaxChunkSize) throw new InvalidDataException($"Data exceeds maximum length of {ServerCapabilities.MaxChunkSize} bytes.");
 
       var metadataResult = await dataStream.EnumerateUntil(length, cancellationToken);
       dataStream = metadataResult.Next;

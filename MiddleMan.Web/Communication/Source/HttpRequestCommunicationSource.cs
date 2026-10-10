@@ -1,19 +1,25 @@
 using System.Runtime.CompilerServices;
 using MiddleMan.Core;
 using MiddleMan.Web.Communication.Metadata;
+using MiddleMan.Web.Infrastructure.Identity;
 
 namespace MiddleMan.Web.Communication.Source
 {
-  public class HttpRequestCommunicationSource(HttpRequest request) : ICommunicationSource
+  public class HttpRequestCommunicationSource(HttpContext context) : ICommunicationSource
   {
-    private readonly HttpRequest request = request;
+    private readonly HttpContext context = context;
 
     public async Task<RequestData> ReadData(CancellationToken cancellationToken = default)
     {
+      var user = new HttpUser
+      {
+        Identifier = context.User?.Identifier() ?? string.Empty,
+      };
+
       return new RequestData
       {
-        Metadata = new HttpRequestMetadata(request),
-        Data = Adapt(request, cancellationToken)
+        Metadata = new HttpRequestMetadata(context.Request, user),
+        Data = Adapt(context.Request, cancellationToken)
       };
     }
 
